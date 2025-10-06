@@ -71,17 +71,25 @@ for x in range(size[0]):
             if np.abs(z) > 2:
                 image[x, y] = i
                 break
-import matplotlib.pyplot as plt
 
-# Increase font-size
-plt.rcParams.update({
-    "font.size": 10,
-})
-plt.imshow(image.T, extent=np.concatenate([xlim, ylim]))
-plt.xlabel(r"x / Re(p_0)")
-plt.ylabel(r"y / Im(p_0)")
+# Check if we should save plot or just data
+if "--output" in sys.argv or "--show" in sys.argv:
+    import matplotlib.pyplot as plt
 
-# Just minimize white-space around the actual plot...
-plt.margins(0, 0)
-plt.savefig("Figure_1.png", bbox_inches="tight", pad_inches=0)
-plt.show()
+    # Increase font-size
+    plt.rcParams.update({
+        "font.size": 10,
+    })
+    plt.imshow(image.T, extent=np.concatenate([xlim, ylim]))
+    plt.xlabel(r"x / Re(p_0)")
+    plt.ylabel(r"y / Im(p_0)")
+
+    # Just minimize white-space around the actual plot...
+    plt.margins(0, 0)
+    plt.savefig("Figure_1.png", bbox_inches="tight", pad_inches=0)
+    plt.show()
+else:
+    # Save the result as numpy array for testing
+    output_file = f"baseline_{size[0]}x{size[1]}.npy"
+    np.save(output_file, image)
+    print(f"Result saved to {output_file}")
