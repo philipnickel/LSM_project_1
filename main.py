@@ -38,6 +38,8 @@ class RunConfig:
     output: Optional[str] = None
     show_plot: bool = False
     save_data: bool = False
+    log_experiment: bool = False
+    save_plot: bool = False
 
     @property
     def width(self) -> int:
@@ -100,6 +102,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> RunConfig:
         action="store_true",
         help="save the computed data array as .npy file",
     )
+    parser.add_argument(
+        "--log-experiment",
+        action="store_true",
+        help="log experiment data to CSV file",
+    )
+    parser.add_argument(
+        "--save-plot",
+        action="store_true",
+        help="save plot as PDF file",
+    )
 
     args = parser.parse_args(argv)
     return RunConfig(
@@ -112,6 +124,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> RunConfig:
         output=args.output,
         show_plot=args.show,
         save_data=args.save_data,
+        log_experiment=args.log_experiment,
+        save_plot=args.save_plot,
     )
 
 
@@ -119,15 +133,31 @@ def run(config: RunConfig) -> Optional[np.ndarray]:
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
 
+    # Initialize experiment logger if requested
+    logger = None
+    if config.log_experiment:
+        from mandelbrot.utils import ExperimentLogger
+        logger = ExperimentLogger(config, comm)
+
     if config.schedule == "static":
         scheduler = StaticScheduler(config, comm.Get_size())
-        image = communication.run_static(comm, config, scheduler, blocking=(config.communication == "blocking"))
+        image = communication.run_static(comm, config, scheduler, blocking=(config.communication == "blocking"), logger=logger)
     else:
         scheduler = DynamicScheduler(config)
-        image = communication.run_dynamic(comm, config, scheduler, blocking=(config.communication == "blocking"))
+        image = communication.run_dynamic(comm, config, scheduler, blocking=(config.communication == "blocking"), logger=logger)
 
-    if rank == 0 and image is not None:
+    # Ensure all ranks complete computation before logging
+    comm.barrier()
+    
+    if logger:
+        # All ranks participate in finalize for data gathering
+        csv_path = logger.finalize(image if rank == 0 else None, 
+                                 save_plot=config.save_plot, save_data=config.save_data)
+        if rank == 0 and csv_path:
+            print(f"Experiment logged to {csv_path}")
+    elif rank == 0 and image is not None:
         _maybe_render(image, config)
+    
     return image if rank == 0 else None
 
 

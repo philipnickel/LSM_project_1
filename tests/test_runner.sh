@@ -7,13 +7,14 @@ set -e  # Exit on any error
 N=${1:-1}                    # Number of MPI processes
 SCHEDULE=${2:-static}        # Scheduling strategy
 COMMUNICATION=${3:-blocking} # Communication pattern
+CHUNK_SIZE=${4:-10}          # Chunk size
 
 # Activate virtual environment if it exists
 if [ -f ".venv/bin/activate" ]; then
     source .venv/bin/activate
 fi
 
-echo "Testing $SCHEDULE + $COMMUNICATION with $N MPI processes against all baselines"
+echo "Testing $SCHEDULE + $COMMUNICATION with $N MPI processes (chunk_size=$CHUNK_SIZE) against all baselines"
 
 # Find all baseline files
 baseline_files=$(find tests/baseline_data -name "baseline_*.npy" 2>/dev/null || true)
@@ -34,7 +35,7 @@ for baseline_file in $baseline_files; do
     
     # Run modular implementation
     echo "Running computation..."
-    if ! mpirun -n $N python main.py 10 $size --schedule $SCHEDULE --communication $COMMUNICATION --save-data; then
+    if ! mpirun -n $N python main.py $CHUNK_SIZE $size --schedule $SCHEDULE --communication $COMMUNICATION --save-data; then
         echo "ERROR: Computation failed for size $size"
         exit 1
     fi

@@ -4,12 +4,14 @@ A modular implementation of the Mandelbrot set computation using MPI (Message Pa
 
 ## Features
 
-- **Modular Architecture**: Clean separation of configuration, computation, scheduling, and communication
+- **Modular Architecture**: Clean separation of computation, scheduling, and communication
 - **Multiple Scheduling Strategies**: Static and dynamic work distribution
 - **Communication Patterns**: Blocking and non-blocking MPI communication
 - **Comprehensive Testing**: Automated testing with numerical validation
 - **Flexible Process Count**: Test with any number of MPI processes
 - **Baseline Comparison**: Results validated against reference implementation
+- **Interactive Analysis**: Jupyter notebook for detailed performance analysis
+- **Experiment Logging**: CSV-based experiment tracking with detailed metrics
 - **Clean Default Behavior**: No files saved by default - only when explicitly requested
 
 ## Project Structure
