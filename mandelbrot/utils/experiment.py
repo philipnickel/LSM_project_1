@@ -114,7 +114,12 @@ class ExperimentLogger:
     def _gather_worker_stats(self) -> Dict[int, Dict]:
         """Gather worker statistics from all ranks."""
         if self.rank == 0:
-            # Master collects from all workers
+            # Check if we already have complete stats for all workers (e.g., from dynamic scheduling)
+            if len(self.worker_stats) == self.size:
+                # We have stats for all ranks, use them directly
+                return self.worker_stats.copy()
+            
+            # Otherwise, collect from workers (static scheduling approach)  
             all_stats = {0: self.worker_stats.get(0, {})}
             
             for source in range(1, self.size):

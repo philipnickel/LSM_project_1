@@ -1,5 +1,0 @@
-experiment_id,timestamp,schedule,communication,num_processes,chunk_size,image_width,image_height,xlim_min,xlim_max,ylim_min,ylim_max,total_chunks,wall_clock_time,computation_time,communication_time,rank,chunks_processed,chunk_ids,row_ranges,load_balance_score,result_file,plot_file
-static_blocking_100x100_4a441163,1759787775,static,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.05021786689758301,0.020380020141601562,0.029761075973510742,0,2,"0,4","0-19,80-99",0.4,,
-static_blocking_100x100_4a441163,1759787775,static,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.05021786689758301,0.011172056198120117,0.01177215576171875,1,1,1,20-39,0.8,,
-static_blocking_100x100_4a441163,1759787775,static,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.05021786689758301,0.02948594093322754,4.6253204345703125e-05,2,1,2,40-59,0.8,,
-static_blocking_100x100_4a441163,1759787775,static,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.05021786689758301,0.05408310890197754,5.1975250244140625e-05,3,1,3,60-79,0.8,,

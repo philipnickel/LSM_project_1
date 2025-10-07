@@ -1,5 +1,0 @@
-experiment_id,timestamp,schedule,communication,num_processes,chunk_size,image_width,image_height,xlim_min,xlim_max,ylim_min,ylim_max,total_chunks,wall_clock_time,computation_time,communication_time,rank,chunks_processed,chunk_ids,row_ranges,load_balance_score,result_file,plot_file
-dynamic_blocking_100x100_2d4a295c,1759787776,dynamic,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.07138586044311523,0.0,0.0,0,0,,,1.0,,
-dynamic_blocking_100x100_2d4a295c,1759787776,dynamic,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.07138586044311523,0.0,0.0,1,0,,,1.0,,
-dynamic_blocking_100x100_2d4a295c,1759787776,dynamic,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.07138586044311523,0.0,0.0,2,0,,,1.0,,
-dynamic_blocking_100x100_2d4a295c,1759787776,dynamic,blocking,4,20,100,100,-2.2,0.75,-1.3,1.3,5,0.07138586044311523,0.0,0.0,3,0,,,1.0,,

@@ -13,7 +13,7 @@ import argparse
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Dict
 
 import numpy as np
 from mpi4py import MPI
@@ -141,13 +141,24 @@ def run(config: RunConfig) -> Optional[np.ndarray]:
 
     if config.schedule == "static":
         scheduler = StaticScheduler(config, comm.Get_size())
-        image = communication.run_static(comm, config, scheduler, blocking=(config.communication == "blocking"), logger=logger)
+        image, worker_stats = communication.run_static(comm, config, scheduler, blocking=(config.communication == "blocking"), logger=logger)
     else:
         scheduler = DynamicScheduler(config)
-        image = communication.run_dynamic(comm, config, scheduler, blocking=(config.communication == "blocking"), logger=logger)
+        image, worker_stats = communication.run_dynamic(comm, config, scheduler, blocking=(config.communication == "blocking"), logger=logger)
 
     # Ensure all ranks complete computation before logging
     comm.barrier()
+    
+    # Log worker stats if logger exists
+    if logger and worker_stats:
+        for worker_rank, stats in worker_stats.items():
+            logger.log_worker_stats(
+                worker_rank, 
+                stats['chunks_processed'],
+                stats['computation_time'],
+                stats['communication_time'],
+                stats['chunk_ids']
+            )
     
     if logger:
         # All ranks participate in finalize for data gathering
