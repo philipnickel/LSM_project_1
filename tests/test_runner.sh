@@ -28,20 +28,34 @@ fi
 # Test against each baseline
 for baseline_file in $baseline_files; do
     # Extract size from filename (baseline_200x150.npy -> 200x150)
-    size=$(basename "$baseline_file" .npy | sed 's/baseline_//' | sed 's/x/x/')
+    filename=$(basename "$baseline_file" .npy)
+    #remove baseline_ prefix
+    params="${filename#baseline_}"
+    # cut as：200x150_-2.2_0.75_-1.3_1.3
+    size=$(echo "$params" | cut -d'_' -f1)           # 200x150
+    xlim_start=$(echo "$params" | cut -d'_' -f2)     # -2.2
+    xlim_end=$(echo "$params" | cut -d'_' -f3)       # 0.75
+    ylim_start=$(echo "$params" | cut -d'_' -f4)     # -1.3
+    ylim_end=$(echo "$params" | cut -d'_' -f5)       # 1.3
+
+    XLIM="${xlim_start}:${xlim_end}"
+    YLIM="${ylim_start}:${ylim_end}"
     
     echo ""
     echo "Testing size: $size"
+
+    echo "testing $XLIM"
+    echo "testing $YLIM"
     
     # Run modular implementation
     echo "Running computation..."
-    if ! mpirun -n $N python main.py $CHUNK_SIZE $size --schedule $SCHEDULE --communication $COMMUNICATION --save-data; then
+    if ! mpirun -n $N python main.py --schedule $SCHEDULE --communication $COMMUNICATION --save-data $CHUNK_SIZE $size -- $XLIM $YLIM; then
         echo "ERROR: Computation failed for size $size"
         exit 1
     fi
     
     # Check if file was created
-    expected_file="modular_${SCHEDULE}_${COMMUNICATION}_${size//x/x}.npy"
+    expected_file="modular_${SCHEDULE}_${COMMUNICATION}_${size}_${xlim_start}_${xlim_end}_${ylim_start}_${ylim_end}.npy"
     if [ ! -f "$expected_file" ]; then
         echo "ERROR: Modular file not created: $expected_file"
         exit 1

@@ -90,6 +90,6 @@ if "--output" in sys.argv or "--show" in sys.argv:
     plt.show()
 else:
     # Save the result as numpy array for testing
-    output_file = f"baseline_{size[0]}x{size[1]}.npy"
+    output_file = f"baseline_{size[0]}x{size[1]}_{xlim[0]}_{xlim[1]}_{ylim[0]}_{ylim[1]}.npy"
     np.save(output_file, image)
     print(f"Result saved to {output_file}")

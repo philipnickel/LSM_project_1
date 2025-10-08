@@ -5,6 +5,8 @@
 N ?= 1
 CHUNK_SIZE ?= 10
 SCHEDULE ?= static
+XLIM ?= "-2.2:0.75"
+YLIM ?= "-1.3:1.3"
 COMMUNICATION ?= blocking
 
 .PHONY: baseline test test-all clean help
@@ -19,14 +21,14 @@ help:
 	@echo "  help                        - Show this help message"
 	@echo ""
 	@echo "Usage examples:"
-	@echo "  make baseline SIZE=100x100                    # Generate baseline for specific size"
-	@echo "  make test SCHEDULE=static COMMUNICATION=blocking N=4 CHUNK_SIZE=20"
+	@echo "  make baseline SIZE=100x100 XLIM=-1.0:1.0 YLIM=-1.0:1.0                    # Generate baseline for specific size"
+	@echo "  make test SCHEDULE=static COMMUNICATION=blocking N=4 CHUNK_SIZE=20 XLIM=-1.0:1.0 YLIM=-1.0:1.0"
 	@echo "  make test-all N=2 CHUNK_SIZE=15              # All combinations with 2 processes"
 
 # Generate baseline data arrays
 baseline:
 	@echo "Generating baseline data arrays..."
-	./tests/generate_baseline.sh $(SIZE)
+	./tests/generate_baseline.sh $(SIZE) $(XLIM) $(YLIM)
 
 # Single test target with parameters
 test:

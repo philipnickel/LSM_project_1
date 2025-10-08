@@ -175,7 +175,7 @@ def run(config: RunConfig) -> Optional[np.ndarray]:
 def _maybe_render(image: np.ndarray, config: RunConfig) -> None:
     # Save data array if requested
     if config.save_data:
-        output_file = f"modular_{config.schedule}_{config.communication}_{config.image_size[0]}x{config.image_size[1]}.npy"
+        output_file = f"modular_{config.schedule}_{config.communication}_{config.image_size[0]}x{config.image_size[1]}_{config.xlim[0]}_{config.xlim[1]}_{config.ylim[0]}_{config.ylim[1]}.npy"
         np.save(output_file, image)
         print(f"Data saved to {output_file}")
     
