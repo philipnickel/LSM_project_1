@@ -1,0 +1,5 @@
+experiment_id,timestamp,schedule,communication,num_processes,chunk_size,image_width,image_height,xlim_min,xlim_max,ylim_min,ylim_max,wall_clock_time,computation_time,communication_time,rank,chunks_processed,chunk_ids
+static_nonblocking_100x100_a7470eee,1759854028,static,nonblocking,4,50,100,100,-2.2,0.75,-1.3,1.3,0.08074378967285156,0.02258777618408203,0.058088064193725586,0,1,0
+static_nonblocking_100x100_a7470eee,1759854028,static,nonblocking,4,50,100,100,-2.2,0.75,-1.3,1.3,0.08074378967285156,0.07956314086914062,0.0012121200561523438,1,1,1
+static_nonblocking_100x100_a7470eee,1759854028,static,nonblocking,4,50,100,100,-2.2,0.75,-1.3,1.3,0.08074378967285156,0.0,3.218650817871094e-05,2,0,
+static_nonblocking_100x100_a7470eee,1759854028,static,nonblocking,4,50,100,100,-2.2,0.75,-1.3,1.3,0.08074378967285156,0.0,3.1948089599609375e-05,3,0,

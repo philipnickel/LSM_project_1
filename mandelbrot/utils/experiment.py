@@ -114,12 +114,8 @@ class ExperimentLogger:
     def _gather_worker_stats(self) -> Dict[int, Dict]:
         """Gather worker statistics from all ranks."""
         if self.rank == 0:
-            # Check if we already have complete stats for all workers (e.g., from dynamic scheduling)
-            if len(self.worker_stats) == self.size:
-                # We have stats for all ranks, use them directly
-                return self.worker_stats.copy()
-            
-            # Otherwise, collect from workers (static scheduling approach)  
+            # Always collect from workers for accurate timing (static and dynamic)
+            # Don't use master's measurements as they may include synchronization delays
             all_stats = {0: self.worker_stats.get(0, {})}
             
             for source in range(1, self.size):
@@ -145,17 +141,7 @@ class ExperimentLogger:
             comm_time = stats.get('communication_time', 0.0)
             chunk_ids = stats.get('chunk_ids', [])
             
-            # Calculate load balance score (0 = worst, 1 = perfect)
-            total_chunks = sum(s.get('chunks_processed', 0) for s in all_worker_stats.values())
-            if total_chunks > 0:
-                expected_chunks = total_chunks / self.size
-                load_balance = 1.0 - abs(chunks_processed - expected_chunks) / expected_chunks
-            else:
-                load_balance = 1.0
-            
-            # Calculate row ranges for this rank
-            row_ranges = self._calculate_row_ranges(chunk_ids)
-            
+            # Core experiment data (no derived/calculated fields)
             row = {
                 'experiment_id': self.experiment_id,
                 'timestamp': int(self.start_time),
@@ -169,34 +155,16 @@ class ExperimentLogger:
                 'xlim_max': self.config.xlim[1],
                 'ylim_min': self.config.ylim[0],
                 'ylim_max': self.config.ylim[1],
-                'total_chunks': self.config.total_chunks,
                 'wall_clock_time': wall_clock_time,
                 'computation_time': comp_time,
                 'communication_time': comm_time,
                 'rank': rank,
                 'chunks_processed': chunks_processed,
                 'chunk_ids': ','.join(map(str, chunk_ids)),
-                'row_ranges': row_ranges,
-                'load_balance_score': load_balance,
-                'result_file': None,
-                'plot_file': None
             }
             rows.append(row)
         
         return pd.DataFrame(rows)
-    
-    def _calculate_row_ranges(self, chunk_ids: List[int]) -> str:
-        """Calculate row ranges for given chunk IDs."""
-        if not chunk_ids:
-            return ""
-        
-        ranges = []
-        for chunk_id in sorted(chunk_ids):
-            start_row = chunk_id * self.config.chunk_size
-            end_row = min(start_row + self.config.chunk_size, self.config.width)
-            ranges.append(f"{start_row}-{end_row-1}")
-        
-        return ','.join(ranges)
     
     def _save_plot(self, image: np.ndarray, plot_path: Path) -> None:
         """Save plot as PDF."""

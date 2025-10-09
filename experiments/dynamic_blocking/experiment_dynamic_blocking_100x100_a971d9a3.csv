@@ -1,0 +1,3 @@
+experiment_id,timestamp,schedule,communication,num_processes,chunk_size,image_width,image_height,xlim_min,xlim_max,ylim_min,ylim_max,wall_clock_time,computation_time,communication_time,rank,chunks_processed,chunk_ids
+dynamic_blocking_100x100_a971d9a3,1759854028,dynamic,blocking,2,50,100,100,-2.2,0.75,-1.3,1.3,0.1017308235168457,0.0,0.0,0,0,
+dynamic_blocking_100x100_a971d9a3,1759854028,dynamic,blocking,2,50,100,100,-2.2,0.75,-1.3,1.3,0.1017308235168457,0.10087823867797852,0.0007364749908447266,1,2,"0,1"

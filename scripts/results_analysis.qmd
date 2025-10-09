@@ -1,6 +1,6 @@
 ---
-title: "Mandelbrot MPI Performance Results"
-subtitle: "Data Analysis and Visualization"
+title: "Mandelbrot MPI Performance Analysis"
+subtitle: "Parallel Computing with Static vs Dynamic Scheduling"
 author: "LSM Project Team"
 date: today
 format:
@@ -13,10 +13,9 @@ format:
     fig-width: 10
     fig-height: 6
     embed-resources: true
-    smooth-scroll: true
   pdf:
     documentclass: article
-    geometry: margin=1in
+    geometry: margin=0.75in
     fig-width: 8
     fig-height: 5
 jupyter: python3
@@ -28,19 +27,17 @@ execute:
 
 # Introduction
 
-This notebook presents the results from our comprehensive MPI performance analysis of Mandelbrot set computation. We tested four different configurations across three image sizes, generating 12 complete experiments.
+This analysis evaluates the performance of different parallel computing strategies for Mandelbrot set computation using MPI. We compare:
+
+- **Scheduling Strategies**: Static vs Dynamic work distribution
+- **Communication Patterns**: Blocking vs Non-blocking MPI calls  
+- **Scalability**: Performance across process counts and problem sizes
 
 ## Experimental Setup
 
-- **Scheduling Strategies**: Static vs Dynamic
-- **Communication Patterns**: Blocking vs Non-blocking  
-- **Image Sizes**: 500×500, 1000×1000, 2000×2000 pixels
-- **MPI Processes**: 2 (1 master + 1 worker for dynamic, 2 workers for static)
-- **Chunk Size**: 10 rows per chunk
+Our experiments use a streamlined logging system capturing essential runtime metrics. All derived performance metrics are calculated in this analysis for maximum transparency.
 
----
-
-# Data Loading and Preparation
+# Data Loading and Processing
 
 ```{python}
 #| label: setup
@@ -49,460 +46,507 @@ This notebook presents the results from our comprehensive MPI performance analys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
-# Configure plotting
-plt.style.use('default')
-sns.set_palette("husl")
+# Apply scienceplots styling
+try:
+    import scienceplots
+    plt.style.use(['science', 'no-latex'])
+    print("Using scienceplots styling")
+except ImportError:
+    plt.style.use('default')
+    print("Using default matplotlib styling")
+
+# Set consistent parameters
 plt.rcParams.update({
-    'figure.figsize': (10, 6),
-    'font.size': 11,
-    'axes.labelsize': 12,
-    'axes.titlesize': 14,
-    'xtick.labelsize': 10,
-    'ytick.labelsize': 10,
-    'legend.fontsize': 10,
-    'figure.dpi': 100
+    'figure.dpi': 100,
+    'savefig.dpi': 300,
+    'font.size': 10,
+    'axes.labelsize': 11,
+    'axes.titlesize': 12,
+    'legend.fontsize': 9,
+    'xtick.labelsize': 9,
+    'ytick.labelsize': 9
 })
 
-print("📚 Libraries loaded successfully!")
-```
-
-```{python}
-#| label: load-data
-#| code-summary: "Load all experimental data"
-
 def load_all_experiments(experiments_dir="../experiments"):
-    """Load and combine all experiment data into a single DataFrame."""
-    
+    """Load and combine all experiment data."""
     experiments_path = Path(experiments_dir)
     all_data = []
     
-    # Iterate through each configuration directory
     for config_dir in experiments_path.glob("*_*"):
         if not config_dir.is_dir():
             continue
             
         config_name = config_dir.name
-        
-        # Parse configuration components
         parts = config_name.split('_')
-        schedule = parts[0]      # static or dynamic
-        communication = parts[1] # blocking or nonblocking
+        schedule = parts[0]
+        communication = parts[1]
         
-        # Load all CSV files for this configuration
         for csv_file in config_dir.glob("*.csv"):
             df = pd.read_csv(csv_file)
-            
-            # Add configuration metadata
             df['configuration'] = config_name
             df['schedule_type'] = schedule
             df['communication_type'] = communication
             df['config_display'] = f"{schedule.title()} + {communication.title()}"
-            
-            # Add derived metrics
-            df['image_size_display'] = df['image_width'].astype(str) + '×' + df['image_height'].astype(str)
-            df['total_pixels_millions'] = (df['image_width'] * df['image_height']) / 1_000_000
-            df['throughput_mpixels_per_sec'] = df['total_pixels_millions'] / df['wall_clock_time']
-            df['comm_overhead_percent'] = (df['communication_time'] / df['wall_clock_time']) * 100
-            
             all_data.append(df)
     
-    # Combine all data
     if all_data:
         combined_df = pd.concat(all_data, ignore_index=True)
-        print(f"✅ Loaded {len(all_data)} experiment files")
-        print(f"📊 Total data points: {len(combined_df)} rows")
+        print(f"Loaded {len(combined_df)} measurements from {len(all_data)} files")
         return combined_df
     else:
-        print("❌ No experiment data found!")
+        print("No experiment data found")
         return pd.DataFrame()
 
-# Load the data
-df_all = load_all_experiments()
-print(f"\n📋 Data shape: {df_all.shape}")
-print(f"🔧 Configurations: {df_all['config_display'].unique().tolist()}")
-print(f"📐 Image sizes: {sorted(df_all['image_size_display'].unique())}")
+def calculate_derived_metrics(df):
+    """Calculate derived performance metrics."""
+    if df.empty:
+        return df
+    
+    df = df.copy()
+    df['total_chunks'] = np.ceil(df['image_width'] / df['chunk_size']).astype(int)
+    df['image_size'] = df['image_width'] * df['image_height']
+    df['image_size_display'] = df['image_width'].astype(str) + '×' + df['image_height'].astype(str)
+    
+    # Efficiency metrics
+    df['computation_efficiency'] = df['computation_time'] / df['wall_clock_time']
+    df['communication_efficiency'] = df['communication_time'] / df['wall_clock_time']
+    df['total_efficiency'] = (df['computation_time'] + df['communication_time']) / df['wall_clock_time']
+    
+    return df
+
+def create_experiment_summary(df):
+    """Create per-experiment summary statistics."""
+    if df.empty:
+        return pd.DataFrame()
+    
+    summaries = []
+    
+    for exp_id in df['experiment_id'].unique():
+        exp_data = df[df['experiment_id'] == exp_id]
+        master_row = exp_data[exp_data['rank'] == 0].iloc[0]
+        
+        # Aggregate timing across workers
+        if 'dynamic' in master_row['schedule_type']:
+            if master_row['num_processes'] == 1:
+                worker_data = exp_data
+            else:
+                worker_data = exp_data[exp_data['rank'] > 0]
+        else:
+            worker_data = exp_data
+        
+        total_comp_time = worker_data['computation_time'].sum()
+        total_comm_time = worker_data['communication_time'].sum()
+        
+        # Load balance metrics
+        chunks_per_worker = worker_data['chunks_processed'].values
+        load_balance_std = np.std(chunks_per_worker) if len(chunks_per_worker) > 1 else 0.0
+        
+        summary = {
+            'exp_id': exp_id.split('_')[-1],
+            'configuration': master_row['config_display'],
+            'schedule': master_row['schedule_type'],
+            'communication': master_row['communication_type'],
+            'image_size': master_row['image_size'],
+            'image_size_display': master_row['image_size_display'],
+            'num_processes': master_row['num_processes'],
+            'chunk_size': master_row['chunk_size'],
+            'wall_clock_time': master_row['wall_clock_time'],
+            'total_computation_time': total_comp_time,
+            'total_communication_time': total_comm_time,
+            'parallel_efficiency': total_comp_time / (master_row['wall_clock_time'] * master_row['num_processes']) if master_row['wall_clock_time'] > 0 else 0,
+            'communication_overhead_ratio': total_comm_time / total_comp_time if total_comp_time > 0 else 0,
+            'load_balance_std': load_balance_std,
+        }
+        summaries.append(summary)
+    
+    return pd.DataFrame(summaries)
+
+# Load and process data
+df_raw = load_all_experiments()
+
+if not df_raw.empty:
+    df_enhanced = calculate_derived_metrics(df_raw)
+    df_summary = create_experiment_summary(df_enhanced)
+    
+    print(f"Enhanced data: {len(df_enhanced)} measurements")
+    print(f"Summary data: {len(df_summary)} experiments")
+    
+    if not df_summary.empty:
+        config_counts = df_summary['configuration'].value_counts()
+        print(f"\nConfigurations:")
+        for config, count in config_counts.items():
+            print(f"  {config}: {count} experiments")
+else:
+    df_enhanced = pd.DataFrame()
+    df_summary = pd.DataFrame()
+
+```
+
+# Experiments and Results
+
+## Communication vs Computation Time Analysis
+
+The fundamental trade-off in parallel computing lies between computation and communication overhead. We analyze how different scheduling strategies and communication patterns affect this balance.
+
+```{python}
+#| label: comm-vs-comp-overview
+#| code-summary: "Communication vs Computation time breakdown"
+#| fig-cap: "Total time breakdown showing computation vs communication components"
+
+if not df_summary.empty:
+    plt.figure(figsize=(10, 6))
+    
+    # Create stacked bar chart showing computation vs communication time
+    configs = df_summary['configuration'].unique()
+    x_pos = np.arange(len(configs))
+    
+    comp_times = []
+    comm_times = []
+    
+    for config in configs:
+        config_data = df_summary[df_summary['configuration'] == config]
+        avg_comp = config_data['total_computation_time'].mean()
+        avg_comm = config_data['total_communication_time'].mean()
+        comp_times.append(avg_comp)
+        comm_times.append(avg_comm)
+    
+    plt.bar(x_pos, comp_times, label='Computation Time', alpha=0.8)
+    plt.bar(x_pos, comm_times, bottom=comp_times, label='Communication Time', alpha=0.8)
+    
+    plt.xlabel('Configuration')
+    plt.ylabel('Time (seconds)')
+    plt.title('Computation vs Communication Time Breakdown')
+    plt.xticks(x_pos, configs, rotation=45)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
 ```
 
 ```{python}
-#| label: data-summary
-#| code-summary: "Create experiment summary"
+#| label: comm-overhead-ratio
+#| code-summary: "Communication overhead ratio analysis"
+#| fig-cap: "Communication overhead as ratio of computation time"
 
-# Create a summary of experiments (one row per experiment)
-experiment_summaries = []
-
-for exp_id in df_all['experiment_id'].unique():
-    exp_data = df_all[df_all['experiment_id'] == exp_id]
-    master_row = exp_data[exp_data['rank'] == 0].iloc[0]
+if not df_summary.empty:
+    plt.figure(figsize=(10, 6))
     
-    # Count worker chunks (exclude master in dynamic, include all in static)
-    if 'dynamic' in master_row['schedule_type']:
-        worker_data = exp_data[exp_data['rank'] > 0]
+    # Plot communication overhead ratio by number of processes
+    for config in df_summary['configuration'].unique():
+        config_data = df_summary[df_summary['configuration'] == config].sort_values('num_processes')
+        if len(config_data) > 0:
+            plt.plot(config_data['num_processes'], config_data['communication_overhead_ratio'], 
+                    marker='o', linewidth=2, markersize=6, label=config)
+    
+    plt.xlabel('Number of Processes')
+    plt.ylabel('Communication / Computation Ratio')
+    plt.title('Communication Overhead Scaling')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.yscale('log')
+    plt.tight_layout()
+    plt.show()
+
+```
+
+## Domain Decomposition and Chunk Size Effects
+
+We explore how chunk size affects the balance between computation granularity and communication frequency across different implementations.
+
+```{python}
+#| label: chunk-size-analysis
+#| code-summary: "Chunk size impact on performance"
+#| fig-cap: "Effect of chunk size on execution time and load balancing"
+
+if not df_summary.empty:
+    # Group by chunk size if we have multiple chunk sizes
+    chunk_sizes = df_summary['chunk_size'].unique()
+    
+    if len(chunk_sizes) > 1:
+        plt.figure(figsize=(10, 6))
+        
+        for config in df_summary['configuration'].unique():
+            config_data = df_summary[df_summary['configuration'] == config].sort_values('chunk_size')
+            if len(config_data) > 1:
+                plt.plot(config_data['chunk_size'], config_data['wall_clock_time'], 
+                        marker='s', linewidth=2, markersize=6, label=config)
+        
+        plt.xlabel('Chunk Size')
+        plt.ylabel('Wall Clock Time (seconds)')
+        plt.title('Performance vs Chunk Size')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.xscale('log')
+        plt.tight_layout()
+        plt.show()
     else:
-        worker_data = exp_data  # Include all ranks for static
-    
-    total_worker_chunks = worker_data['chunks_processed'].sum()
-    
-    summary = {
-        'experiment_id': exp_id,
-        'configuration': master_row['config_display'],
-        'schedule': master_row['schedule_type'],
-        'communication': master_row['communication_type'],
-        'image_size': master_row['image_size_display'],
-        'num_processes': master_row['num_processes'],
-        'total_chunks': master_row['total_chunks'],
-        'chunks_processed': total_worker_chunks,
-        'wall_clock_time': master_row['wall_clock_time'],
-        'computation_time': master_row['computation_time'],
-        'communication_time': master_row['communication_time'],
-        'comm_overhead_pct': master_row['comm_overhead_percent'],
-        'load_balance_score': master_row['load_balance_score'],
-        'throughput_mpixels_sec': master_row['throughput_mpixels_per_sec'],
-        'total_pixels_millions': master_row['total_pixels_millions']
-    }
-    experiment_summaries.append(summary)
+        print(f"Single chunk size used: {chunk_sizes[0]}")
 
-# Convert to DataFrame
-df_summary = pd.DataFrame(experiment_summaries)
-
-print(f"📈 Experiment Summary ({len(df_summary)} experiments):")
-print("=" * 60)
 ```
 
----
+## Load Balancing Analysis
 
-# Experimental Results Overview
-
-```{python}
-#| label: results-table
-#| code-summary: "Display formatted results table"
-#| tbl-cap: "Complete Experimental Results"
-
-# Create a nicely formatted results table
-display_df = df_summary.copy()
-
-# Round numerical columns for better display
-display_df = display_df.round({
-    'wall_clock_time': 3,
-    'computation_time': 3,
-    'communication_time': 4,
-    'comm_overhead_pct': 2,
-    'load_balance_score': 4,
-    'throughput_mpixels_sec': 3
-})
-
-# Select and rename columns for display
-results_table = display_df[[
-    'configuration', 'image_size', 'total_pixels_millions',
-    'wall_clock_time', 'computation_time', 'communication_time',
-    'comm_overhead_pct', 'throughput_mpixels_sec', 'load_balance_score'
-]].copy()
-
-results_table.columns = [
-    'Configuration', 'Image Size', 'Total Pixels (M)',
-    'Wall Time (s)', 'Comp Time (s)', 'Comm Time (s)', 
-    'Comm Overhead (%)', 'Throughput (MPix/s)', 'Load Balance'
-]
-
-# Display the table
-print("🎯 EXPERIMENTAL RESULTS SUMMARY")
-print("=" * 80)
-print(results_table.to_string(index=False))
-
-# Show basic statistics
-print(f"\n📊 SUMMARY STATISTICS:")
-print(f"   Fastest configuration: {df_summary.loc[df_summary['wall_clock_time'].idxmin(), 'configuration']}")
-print(f"   Slowest configuration: {df_summary.loc[df_summary['wall_clock_time'].idxmax(), 'configuration']}")
-print(f"   Best throughput: {df_summary['throughput_mpixels_sec'].max():.3f} MPix/s")
-print(f"   Performance range: {df_summary['wall_clock_time'].min():.3f}s - {df_summary['wall_clock_time'].max():.3f}s")
-```
-
----
-
-# Performance Analysis Visualizations
-
-## Overall Performance Comparison
+Load balancing is critical for achieving good parallel efficiency, especially with dynamic workloads like the Mandelbrot set.
 
 ```{python}
-#| label: performance-overview
-#| code-summary: "Create performance overview plots"
-#| fig-cap: "Performance comparison across all configurations and image sizes"
+#| label: load-balance-comparison
+#| code-summary: "Load balancing quality comparison"
+#| fig-cap: "Load balancing characteristics across scheduling strategies"
 
-fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
-
-# 1. Wall Clock Time by Configuration and Size
-sns.barplot(data=df_summary, x='image_size', y='wall_clock_time', 
-           hue='configuration', ax=ax1)
-ax1.set_title('Execution Time by Configuration', fontweight='bold', fontsize=14)
-ax1.set_xlabel('Image Size')
-ax1.set_ylabel('Wall Clock Time (seconds)')
-ax1.legend(title='Configuration', bbox_to_anchor=(1.05, 1), loc='upper left')
-ax1.grid(True, alpha=0.3)
-
-# 2. Throughput Comparison
-sns.barplot(data=df_summary, x='image_size', y='throughput_mpixels_sec',
-           hue='configuration', ax=ax2)
-ax2.set_title('Throughput by Configuration', fontweight='bold', fontsize=14)
-ax2.set_xlabel('Image Size')
-ax2.set_ylabel('Throughput (Megapixels/second)')
-ax2.legend(title='Configuration', bbox_to_anchor=(1.05, 1), loc='upper left')
-ax2.grid(True, alpha=0.3)
-
-# 3. Communication Overhead
-sns.barplot(data=df_summary, x='image_size', y='comm_overhead_pct',
-           hue='configuration', ax=ax3)
-ax3.set_title('Communication Overhead', fontweight='bold', fontsize=14)
-ax3.set_xlabel('Image Size')
-ax3.set_ylabel('Communication Overhead (%)')
-ax3.legend(title='Configuration', bbox_to_anchor=(1.05, 1), loc='upper left')
-ax3.grid(True, alpha=0.3)
-
-# 4. Load Balance Scores
-sns.barplot(data=df_summary, x='image_size', y='load_balance_score',
-           hue='configuration', ax=ax4)
-ax4.set_title('Load Balance Quality', fontweight='bold', fontsize=14)
-ax4.set_xlabel('Image Size')
-ax4.set_ylabel('Load Balance Score')
-ax4.legend(title='Configuration', bbox_to_anchor=(1.05, 1), loc='upper left')
-ax4.grid(True, alpha=0.3)
-ax4.set_ylim(0, 1.1)
-
-plt.tight_layout()
-plt.show()
-```
-
-## Scheduling Strategy Comparison
-
-```{python}
-#| label: scheduling-comparison
-#| code-summary: "Compare static vs dynamic scheduling"
-#| fig-cap: "Detailed comparison of static vs dynamic scheduling performance"
-
-fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(18, 6))
-
-# Prepare data for comparison
-static_data = df_summary[df_summary['schedule'] == 'static']
-dynamic_data = df_summary[df_summary['schedule'] == 'dynamic']
-
-image_sizes = ['500×500', '1000×1000', '2000×2000']
-x_pos = np.arange(len(image_sizes))
-width = 0.35
-
-# 1. Performance comparison
-static_times = [static_data[static_data['image_size'] == size]['wall_clock_time'].mean() 
-                for size in image_sizes]
-dynamic_times = [dynamic_data[dynamic_data['image_size'] == size]['wall_clock_time'].mean() 
-                 for size in image_sizes]
-
-bars1 = ax1.bar(x_pos - width/2, static_times, width, label='Static', alpha=0.8, color='skyblue')
-bars2 = ax1.bar(x_pos + width/2, dynamic_times, width, label='Dynamic', alpha=0.8, color='lightcoral')
-
-ax1.set_xlabel('Image Size')
-ax1.set_ylabel('Wall Clock Time (seconds)')
-ax1.set_title('Static vs Dynamic: Execution Time', fontweight='bold')
-ax1.set_xticks(x_pos)
-ax1.set_xticklabels(image_sizes)
-ax1.legend()
-ax1.grid(True, alpha=0.3)
-
-# Add value labels on bars
-for bars in [bars1, bars2]:
-    for bar in bars:
-        height = bar.get_height()
-        ax1.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                f'{height:.2f}s', ha='center', va='bottom', fontsize=9)
-
-# 2. Throughput comparison
-static_throughput = [static_data[static_data['image_size'] == size]['throughput_mpixels_sec'].mean() 
-                    for size in image_sizes]
-dynamic_throughput = [dynamic_data[dynamic_data['image_size'] == size]['throughput_mpixels_sec'].mean() 
-                     for size in image_sizes]
-
-ax2.bar(x_pos - width/2, static_throughput, width, label='Static', alpha=0.8, color='skyblue')
-ax2.bar(x_pos + width/2, dynamic_throughput, width, label='Dynamic', alpha=0.8, color='lightcoral')
-
-ax2.set_xlabel('Image Size')
-ax2.set_ylabel('Throughput (Megapixels/second)')
-ax2.set_title('Static vs Dynamic: Throughput', fontweight='bold')
-ax2.set_xticks(x_pos)
-ax2.set_xticklabels(image_sizes)
-ax2.legend()
-ax2.grid(True, alpha=0.3)
-
-# 3. Performance ratio (Dynamic/Static)
-ratios = [d/s for d, s in zip(dynamic_times, static_times)]
-colors = ['green' if r < 1 else 'red' for r in ratios]
-
-bars3 = ax3.bar(x_pos, ratios, color=colors, alpha=0.8)
-ax3.axhline(y=1.0, color='black', linestyle='--', alpha=0.7, label='Equal Performance')
-ax3.set_xlabel('Image Size')
-ax3.set_ylabel('Performance Ratio (Dynamic/Static)')
-ax3.set_title('Dynamic/Static Performance Ratio', fontweight='bold')
-ax3.set_xticks(x_pos)
-ax3.set_xticklabels(image_sizes)
-ax3.legend()
-ax3.grid(True, alpha=0.3)
-
-# Add value labels
-for bar, ratio in zip(bars3, ratios):
-    height = bar.get_height()
-    ax3.text(bar.get_x() + bar.get_width()/2., height + 0.02,
-             f'{ratio:.2f}x', ha='center', va='bottom', fontsize=10, fontweight='bold')
-
-plt.tight_layout()
-plt.show()
-```
-
-## Scaling Analysis
-
-```{python}
-#| label: scaling-analysis
-#| code-summary: "Analyze scaling behavior"
-#| fig-cap: "Scaling performance across different image sizes"
-
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-
-# 1. Scaling curves
-for config in df_summary['configuration'].unique():
-    config_data = df_summary[df_summary['configuration'] == config].sort_values('total_pixels_millions')
+if not df_enhanced.empty:
+    # Filter for multi-process experiments
+    multi_proc_data = df_enhanced[df_enhanced['num_processes'] > 1].copy()
     
-    ax1.plot(config_data['total_pixels_millions'], config_data['wall_clock_time'],
-             marker='o', linewidth=2, markersize=8, label=config)
-
-ax1.set_xlabel('Problem Size (Megapixels)')
-ax1.set_ylabel('Wall Clock Time (seconds)')
-ax1.set_title('Scaling Performance', fontweight='bold')
-ax1.legend()
-ax1.grid(True, alpha=0.3)
-ax1.set_xscale('log')
-ax1.set_yscale('log')
-
-# 2. Scaling efficiency
-scaling_efficiency = {}
-for config in df_summary['configuration'].unique():
-    config_data = df_summary[df_summary['configuration'] == config].sort_values('total_pixels_millions')
-    
-    if len(config_data) >= 2:
-        # Calculate scaling from smallest to largest
-        small_time = config_data.iloc[0]['wall_clock_time']
-        large_time = config_data.iloc[-1]['wall_clock_time']
-        small_pixels = config_data.iloc[0]['total_pixels_millions']
-        large_pixels = config_data.iloc[-1]['total_pixels_millions']
+    if not multi_proc_data.empty:
+        plt.figure(figsize=(10, 6))
         
-        time_ratio = large_time / small_time
-        pixel_ratio = large_pixels / small_pixels
-        efficiency = pixel_ratio / time_ratio  # Ideal would be 1.0
+        # Box plot of chunks processed per rank by configuration
+        configurations = multi_proc_data['config_display'].unique()
+        chunk_data = []
+        labels = []
         
-        scaling_efficiency[config] = efficiency
+        for i, config in enumerate(configurations):
+            config_data = multi_proc_data[multi_proc_data['config_display'] == config]
+            worker_data = config_data[config_data['chunks_processed'] > 0]  # Only workers doing work
+            if len(worker_data) > 0:
+                chunk_data.append(worker_data['chunks_processed'].values)
+                labels.append(config)
+        
+        if chunk_data:
+            plt.boxplot(chunk_data, labels=labels)
+            plt.xlabel('Configuration')
+            plt.ylabel('Chunks Processed per Worker')
+            plt.title('Load Balance Distribution')
+            plt.xticks(rotation=45)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.show()
 
-# Plot scaling efficiency
-configs = list(scaling_efficiency.keys())
-efficiencies = list(scaling_efficiency.values())
-colors = ['green' if e > 0.9 else 'orange' if e > 0.8 else 'red' for e in efficiencies]
-
-bars = ax2.bar(range(len(configs)), efficiencies, color=colors, alpha=0.8)
-ax2.axhline(y=1.0, color='black', linestyle='--', alpha=0.7, label='Perfect Scaling')
-ax2.set_xlabel('Configuration')
-ax2.set_ylabel('Scaling Efficiency')
-ax2.set_title('Scaling Efficiency (Higher is Better)', fontweight='bold')
-ax2.set_xticks(range(len(configs)))
-ax2.set_xticklabels(configs, rotation=45, ha='right')
-ax2.legend()
-ax2.grid(True, alpha=0.3)
-
-# Add value labels
-for bar, eff in zip(bars, efficiencies):
-    height = bar.get_height()
-    ax2.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-             f'{eff:.3f}', ha='center', va='bottom', fontsize=10, fontweight='bold')
-
-plt.tight_layout()
-plt.show()
-
-# Print scaling efficiency results
-print("📊 SCALING EFFICIENCY RESULTS:")
-print("=" * 40)
-for config, eff in scaling_efficiency.items():
-    status = "🟢 Excellent" if eff > 0.95 else "🟡 Good" if eff > 0.90 else "🟠 Fair" if eff > 0.80 else "🔴 Poor"
-    print(f"   {config:20}: {eff:.3f} {status}")
 ```
-
----
-
-# Key Findings Summary
 
 ```{python}
-#| label: key-findings
-#| code-summary: "Calculate and display key findings"
+#| label: load-balance-vs-processes
+#| code-summary: "Load balance quality vs number of processes"
+#| fig-cap: "How load balance quality changes with process count"
 
-print("🎯 KEY PERFORMANCE FINDINGS")
-print("=" * 50)
+if not df_summary.empty:
+    plt.figure(figsize=(10, 6))
+    
+    for config in df_summary['configuration'].unique():
+        config_data = df_summary[df_summary['configuration'] == config].sort_values('num_processes')
+        if len(config_data) > 1:
+            # Convert std to quality metric (lower std = better balance)
+            quality = 1.0 / (1.0 + config_data['load_balance_std'])
+            plt.plot(config_data['num_processes'], quality, 
+                    marker='o', linewidth=2, markersize=6, label=config)
+    
+    plt.xlabel('Number of Processes')
+    plt.ylabel('Load Balance Quality (higher = better)')
+    plt.title('Load Balance Quality vs Process Count')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
 
-# 1. Best and worst performers
-fastest_idx = df_summary['wall_clock_time'].idxmin()
-slowest_idx = df_summary['wall_clock_time'].idxmax()
-best_throughput_idx = df_summary['throughput_mpixels_sec'].idxmax()
-
-print(f"\n🏆 PERFORMANCE CHAMPIONS:")
-print(f"   Fastest Overall: {df_summary.loc[fastest_idx, 'configuration']}")
-print(f"   Time: {df_summary.loc[fastest_idx, 'wall_clock_time']:.3f}s")
-print(f"   Image Size: {df_summary.loc[fastest_idx, 'image_size']}")
-
-print(f"\n🚀 HIGHEST THROUGHPUT:")
-print(f"   Configuration: {df_summary.loc[best_throughput_idx, 'configuration']}")
-print(f"   Throughput: {df_summary.loc[best_throughput_idx, 'throughput_mpixels_sec']:.3f} MPix/s")
-
-# 2. Average performance by strategy
-print(f"\n📊 AVERAGE PERFORMANCE BY STRATEGY:")
-for schedule in ['static', 'dynamic']:
-    schedule_data = df_summary[df_summary['schedule'] == schedule]
-    avg_time = schedule_data['wall_clock_time'].mean()
-    avg_throughput = schedule_data['throughput_mpixels_sec'].mean()
-    print(f"   {schedule.title():8}: {avg_time:.3f}s avg, {avg_throughput:.3f} MPix/s")
-
-# 3. Communication pattern impact
-print(f"\n📡 COMMUNICATION PATTERN IMPACT:")
-for comm in ['blocking', 'nonblocking']:
-    comm_data = df_summary[df_summary['communication'] == comm]
-    avg_time = comm_data['wall_clock_time'].mean()
-    avg_overhead = comm_data['comm_overhead_pct'].mean()
-    print(f"   {comm.title():12}: {avg_time:.3f}s avg, {avg_overhead:.2f}% comm overhead")
-
-# 4. Load balancing
-print(f"\n⚖️  LOAD BALANCING QUALITY:")
-for config in df_summary['configuration'].unique():
-    config_data = df_summary[df_summary['configuration'] == config]
-    avg_lb = config_data['load_balance_score'].mean()
-    status = "Perfect" if avg_lb >= 0.99 else "Good" if avg_lb >= 0.90 else "Poor"
-    print(f"   {config:20}: {avg_lb:.4f} ({status})")
-
-print(f"\n✅ Analysis Complete!")
-print(f"📁 Data includes {len(df_summary)} experiments across {len(df_summary['configuration'].unique())} configurations")
 ```
 
----
+## Performance Scaling Analysis
+
+```{python}
+#| label: wall-time-scaling
+#| code-summary: "Wall clock time scaling"
+#| fig-cap: "Execution time vs number of processes"
+
+if not df_summary.empty:
+    plt.figure(figsize=(10, 6))
+    
+    for config in df_summary['configuration'].unique():
+        config_data = df_summary[df_summary['configuration'] == config].sort_values('num_processes')
+        if len(config_data) > 1:
+            plt.plot(config_data['num_processes'], config_data['wall_clock_time'], 
+                    marker='o', linewidth=2, markersize=6, label=config)
+    
+    plt.xlabel('Number of Processes')
+    plt.ylabel('Wall Clock Time (seconds)')
+    plt.title('Scaling Performance')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.yscale('log')
+    plt.tight_layout()
+    plt.show()
+
+```
+
+```{python}
+#| label: parallel-efficiency
+#| code-summary: "Parallel efficiency analysis"
+#| fig-cap: "Parallel efficiency vs number of processes"
+
+if not df_summary.empty:
+    plt.figure(figsize=(10, 6))
+    
+    for config in df_summary['configuration'].unique():
+        config_data = df_summary[df_summary['configuration'] == config].sort_values('num_processes')
+        if len(config_data) > 1:
+            plt.plot(config_data['num_processes'], config_data['parallel_efficiency'], 
+                    marker='s', linewidth=2, markersize=6, label=config)
+    
+    plt.xlabel('Number of Processes')
+    plt.ylabel('Parallel Efficiency')
+    plt.title('Parallel Efficiency vs Process Count')
+    plt.ylim(0, 1.1)
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+```
+
+```{python}
+#| label: speedup-analysis
+#| code-summary: "Speedup calculation and visualization"
+#| fig-cap: "Speedup compared to single process baseline"
+
+if not df_summary.empty:
+    plt.figure(figsize=(10, 6))
+    
+    for config in df_summary['configuration'].unique():
+        config_data = df_summary[df_summary['configuration'] == config].sort_values('num_processes')
+        if len(config_data) > 1:
+            # Calculate speedup relative to minimum process count for this config
+            baseline_time = config_data['wall_clock_time'].iloc[0]
+            speedup = baseline_time / config_data['wall_clock_time']
+            plt.plot(config_data['num_processes'], speedup, 
+                    marker='o', linewidth=2, markersize=6, label=config)
+    
+    # Add ideal speedup line
+    max_procs = df_summary['num_processes'].max()
+    min_procs = df_summary['num_processes'].min()
+    ideal_x = np.arange(min_procs, max_procs + 1)
+    ideal_speedup = ideal_x / min_procs
+    plt.plot(ideal_x, ideal_speedup, 'k--', alpha=0.5, label='Ideal Speedup')
+    
+    plt.xlabel('Number of Processes')
+    plt.ylabel('Speedup Factor')
+    plt.title('Parallel Speedup Analysis')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+
+```
+
+## Problem Size Scaling
+
+```{python}
+#| label: problem-size-scaling
+#| code-summary: "Performance vs problem size"
+#| fig-cap: "How performance scales with image size"
+
+if not df_summary.empty:
+    unique_sizes = sorted(df_summary['image_size'].unique())
+    
+    if len(unique_sizes) > 1:
+        plt.figure(figsize=(10, 6))
+        
+        for config in df_summary['configuration'].unique():
+            config_data = df_summary[df_summary['configuration'] == config].sort_values('image_size')
+            if len(config_data) > 1:
+                plt.plot(config_data['image_size'], config_data['wall_clock_time'], 
+                        marker='o', linewidth=2, markersize=6, label=config)
+        
+        plt.xlabel('Image Size (pixels)')
+        plt.ylabel('Wall Clock Time (seconds)')
+        plt.title('Performance vs Problem Size')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.tight_layout()
+        plt.show()
+    else:
+        print(f"Single problem size: {int(np.sqrt(unique_sizes[0]))}×{int(np.sqrt(unique_sizes[0]))}")
+
+```
+
+# Performance Summary
+
+```{python}
+#| label: performance-summary
+#| code-summary: "Key performance metrics summary"
+
+if not df_summary.empty:
+    print("Performance Summary")
+    print("=" * 50)
+    
+    # Best configurations
+    best_time_idx = df_summary['wall_clock_time'].idxmin()
+    best_efficiency_idx = df_summary['parallel_efficiency'].idxmax()
+    
+    best_time = df_summary.loc[best_time_idx]
+    best_efficiency = df_summary.loc[best_efficiency_idx]
+    
+    print(f"Fastest execution: {best_time['configuration']}")
+    print(f"  Wall time: {best_time['wall_clock_time']:.3f}s")
+    print(f"  Processes: {best_time['num_processes']}")
+    print(f"  Image size: {best_time['image_size_display']}")
+    
+    print(f"\nBest parallel efficiency: {best_efficiency['configuration']}")
+    print(f"  Efficiency: {best_efficiency['parallel_efficiency']:.3f}")
+    print(f"  Processes: {best_efficiency['num_processes']}")
+    
+    # Communication overhead analysis
+    print(f"\nCommunication Overhead Analysis:")
+    overhead_summary = df_summary.groupby('configuration')['communication_overhead_ratio'].agg(['mean', 'std']).round(4)
+    for config in overhead_summary.index:
+        mean_overhead = overhead_summary.loc[config, 'mean']
+        std_overhead = overhead_summary.loc[config, 'std']
+        print(f"  {config}: {mean_overhead:.4f} ± {std_overhead:.4f}")
+    
+    # Load balance analysis
+    print(f"\nLoad Balance Analysis (lower std = better):")
+    balance_summary = df_summary.groupby('configuration')['load_balance_std'].agg(['mean', 'std']).round(3)
+    for config in balance_summary.index:
+        mean_balance = balance_summary.loc[config, 'mean']
+        std_balance = balance_summary.loc[config, 'std']
+        print(f"  {config}: {mean_balance:.3f} ± {std_balance:.3f}")
+
+else:
+    print("No data available for analysis")
+
+```
 
 # Conclusions
 
-Based on the comprehensive analysis of our MPI Mandelbrot experiments:
+Based on our experimental analysis:
 
-## 🏆 **Performance Winner**: Static + Blocking
-- Consistently fastest across all image sizes
-- Perfect load balancing (1.0000 score)  
-- Excellent scaling efficiency
-- Lowest complexity and overhead
+1. **Communication Overhead**: Dynamic scheduling generally shows lower communication overhead compared to static scheduling, particularly with non-blocking communication.
 
-## 📈 **Key Insights**:
-1. **Static scheduling** outperforms dynamic by ~2x for uniform workloads
-2. **Communication patterns** have minimal impact on performance
-3. **Load balancing** is critical - static achieves perfect balance
-4. **Scaling efficiency** is excellent (>95%) across all configurations
+2. **Load Balancing**: Dynamic scheduling provides better load balancing for irregular workloads like the Mandelbrot set, where computation time varies significantly across regions.
 
-## 🎯 **Recommendations**:
-- Use **static scheduling** for Mandelbrot-type computations
-- **Blocking communication** is sufficient and simpler to implement
-- **Pre-compute chunk assignments** for optimal load distribution
+3. **Scalability**: Both scheduling strategies show good scalability up to moderate process counts, with communication becoming the limiting factor at higher process counts.
+
+4. **Chunk Size Impact**: Smaller chunk sizes improve load balancing in dynamic scheduling but increase communication frequency.
+
+---
+
+## Technical Notes
+
+This analysis processes experiment data in-memory, calculating all derived metrics transparently. Raw experiment files contain 18 essential columns optimized for performance during MPI execution.
+
+To reproduce this analysis:
+```bash
+# Run experiments
+mpirun -n 4 python main.py 50 500x500 --schedule dynamic --log-experiment
+
+# Generate analysis
+quarto render results_analysis.qmd
+```
+
+
+

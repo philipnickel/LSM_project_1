@@ -114,11 +114,31 @@ def run_dynamic(comm: MPI.Intracomm, config: RunConfig, scheduler: DynamicSchedu
             image, worker_stats_dict = _master_loop_nonblocking(comm, config, scheduler, logger)
         return image, worker_stats_dict
     else:
-        if blocking:
-            _worker_loop_blocking(comm, config, logger)
-        else:
-            _worker_loop_nonblocking(comm, config, logger)
-        return None, {}
+        try:
+            if blocking:
+                worker_stats = _worker_loop_blocking(comm, config, logger)
+            else:
+                worker_stats = _worker_loop_nonblocking(comm, config, logger)
+                
+            # Ensure stats are never None or empty
+            if not worker_stats:
+                worker_stats = {
+                    'chunks_processed': 0,
+                    'computation_time': 0.0,
+                    'communication_time': 0.0,
+                    'chunk_ids': []
+                }
+            
+            return None, {rank: worker_stats}
+        except Exception as e:
+            print(f"ERROR: Worker {rank} failed: {e}", flush=True)
+            # Return safe default stats
+            return None, {rank: {
+                'chunks_processed': 0,
+                'computation_time': 0.0,
+                'communication_time': 0.0,
+                'chunk_ids': []
+            }}
 
 
 def _gather_blocking(
@@ -223,6 +243,7 @@ def _master_loop_blocking(comm: MPI.Intracomm, config: RunConfig, scheduler: Dyn
     world_size = comm.Get_size()
     worker_chunks: Dict[int, int] = {rank: 0 for rank in range(world_size)}
     worker_chunk_ids: Dict[int, List[int]] = {rank: [] for rank in range(world_size)}
+    worker_timing: Dict[int, Tuple[float, float]] = {}  # comp_time, comm_time
     done_ranks: Set[int] = set()
     results_received = 0
 
@@ -253,6 +274,12 @@ def _master_loop_blocking(comm: MPI.Intracomm, config: RunConfig, scheduler: Dyn
             count_buf = np.array(0, dtype=np.int32)
             comm.Recv(count_buf, source=source, tag=DONE_TAG)
             worker_chunks[source] = int(count_buf)  # Use worker's reported count
+            
+            # Receive timing data
+            timing_buf = np.zeros(2, dtype=np.float64)
+            comm.Recv(timing_buf, source=source, tag=DONE_TAG + 1)
+            worker_timing[source] = (float(timing_buf[0]), float(timing_buf[1]))
+            
             done_ranks.add(source)
         else:
             comm.recv(source=source, tag=tag)  # Drain unexpected message
@@ -261,11 +288,12 @@ def _master_loop_blocking(comm: MPI.Intracomm, config: RunConfig, scheduler: Dyn
     worker_stats_dict = {}
     
     for worker in range(1, world_size):
+        comp_time, comm_time = worker_timing.get(worker, (0.0, 0.0))
         print(f"Worker {worker} processed {worker_chunks[worker]} chunks", flush=True)
         worker_stats_dict[worker] = {
             'chunks_processed': worker_chunks[worker],
-            'computation_time': 0.0,  # Workers don't report this in dynamic
-            'communication_time': 0.0,
+            'computation_time': comp_time,
+            'communication_time': comm_time,
             'chunk_ids': worker_chunk_ids[worker]
         }
 
@@ -286,6 +314,7 @@ def _master_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, scheduler: 
     world_size = comm.Get_size()
     worker_chunks: Dict[int, int] = {rank: 0 for rank in range(world_size)}
     worker_chunk_ids: Dict[int, List[int]] = {rank: [] for rank in range(world_size)}
+    worker_timing: Dict[int, Tuple[float, float]] = {}  # comp_time, comm_time
     results_received = 0
     
     # Pre-post receives for work requests from all workers
@@ -348,14 +377,21 @@ def _master_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, scheduler: 
     # Prepare worker stats to return
     worker_stats_dict = {}
     
-    # Wait for workers to finish
+    # Wait for workers to finish and receive timing data
     for worker_rank in range(1, world_size):
         num_chunks = comm.recv(source=worker_rank, tag=DONE_TAG)
+        
+        # Receive timing data
+        timing_buf = np.zeros(2, dtype=np.float64)
+        comm.Recv(timing_buf, source=worker_rank, tag=DONE_TAG + 1)
+        comp_time, comm_time = float(timing_buf[0]), float(timing_buf[1])
+        worker_timing[worker_rank] = (comp_time, comm_time)
+        
         print(f"Worker {worker_rank} processed {num_chunks} chunks", flush=True)
         worker_stats_dict[worker_rank] = {
             'chunks_processed': num_chunks,
-            'computation_time': 0.0,  # Workers don't report this in dynamic
-            'communication_time': 0.0,
+            'computation_time': comp_time,
+            'communication_time': comm_time,
             'chunk_ids': worker_chunk_ids[worker_rank]
         }
 
@@ -370,34 +406,73 @@ def _master_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, scheduler: 
     return full_image, worker_stats_dict
 
 
-def _worker_loop_blocking(comm: MPI.Intracomm, config: RunConfig, logger = None) -> None:
+def _worker_loop_blocking(comm: MPI.Intracomm, config: RunConfig, logger = None) -> Dict:
     """Worker loop for dynamic scheduling with blocking communication."""
     chunks_processed = 0
+    total_computation_time = 0.0
+    total_communication_time = 0.0
+    chunk_ids = []
+    
     while True:
+        # Communication: Request work
+        comm_start = time.time()
         comm.send(None, dest=0, tag=REQUEST_TAG)
         assignment = np.array(0, dtype=np.int32)
         comm.Recv(assignment, source=0, tag=ASSIGN_TAG)
         chunk_id = int(assignment)
+        comm_time = time.time() - comm_start
+        total_communication_time += comm_time
+        
         if chunk_id < 0:
             break
+            
+        chunk_ids.append(chunk_id)
+        
+        # Computation: Process chunk
+        comp_start = time.time()
         start_row, end_row, chunk = compute_chunk(config, chunk_id)
+        comp_time = time.time() - comp_start
+        total_computation_time += comp_time
+        
+        # Communication: Send result
+        comm_start = time.time()
         metadata = np.array([start_row, end_row], dtype=np.int32)
         comm.Send(metadata, dest=0, tag=META_TAG)
         comm.Send(chunk, dest=0, tag=DATA_TAG)
+        comm_time = time.time() - comm_start
+        total_communication_time += comm_time
+        
         chunks_processed += 1
 
+    # Send final stats to master
     comm.Send(np.array(chunks_processed, dtype=np.int32), dest=0, tag=DONE_TAG)
+    
+    # Send timing data to master (using new tags)
+    timing_data = np.array([total_computation_time, total_communication_time], dtype=np.float64)
+    comm.Send(timing_data, dest=0, tag=DONE_TAG + 1)
+    
+    # Return stats for this worker
+    return {
+        'chunks_processed': chunks_processed,
+        'computation_time': total_computation_time,
+        'communication_time': total_communication_time,
+        'chunk_ids': chunk_ids
+    }
 
 
-def _worker_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, logger = None) -> None:
+def _worker_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, logger = None) -> Dict:
     """Worker loop for dynamic scheduling with non-blocking communication."""
     chunks_processed = 0
     active_sends = []
+    total_computation_time = 0.0
+    total_communication_time = 0.0
+    chunk_ids = []
     
     # Pre-allocate buffer for assignment
     assignment_buf = np.array(-1, dtype=np.int32)
     
     # Initial work request and receive
+    comm_start = time.time()
     req_work = comm.Isend(np.array(0, dtype=np.int32), dest=0, tag=REQUEST_TAG)
     req_assign = comm.Irecv(assignment_buf, source=0, tag=ASSIGN_TAG)
     
@@ -405,13 +480,21 @@ def _worker_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, logger = No
         # Wait for assignment
         req_assign.Wait()
         req_work.Wait()
+        comm_time = time.time() - comm_start
+        total_communication_time += comm_time
+        
         chunk_id = int(assignment_buf)
         
         if chunk_id < 0:
             break
 
+        chunk_ids.append(chunk_id)
+
         # Compute
+        comp_start = time.time()
         start_row, end_row, chunk = compute_chunk(config, chunk_id)
+        comp_time = time.time() - comp_start
+        total_computation_time += comp_time
         chunks_processed += 1
         
         # Prepare send buffers
@@ -421,6 +504,7 @@ def _worker_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, logger = No
         padded_data[:rows, :] = chunk
         
         # Non-blocking sends (use META_TAG and DATA_TAG to match master expectations)
+        comm_start = time.time()
         req_meta = comm.Isend(metadata, dest=0, tag=META_TAG)
         req_data = comm.Isend(padded_data, dest=0, tag=DATA_TAG)
         active_sends.append((req_meta, req_data, metadata, padded_data))
@@ -429,14 +513,30 @@ def _worker_loop_nonblocking(comm: MPI.Intracomm, config: RunConfig, logger = No
         req_work = comm.Isend(np.array(0, dtype=np.int32), dest=0, tag=REQUEST_TAG)
         assignment_buf = np.array(-1, dtype=np.int32)  # New buffer
         req_assign = comm.Irecv(assignment_buf, source=0, tag=ASSIGN_TAG)
+        comm_start = time.time()  # Start timing for next iteration
         
         # Cleanup completed sends
         active_sends = [(rm, rd, m, d) for rm, rd, m, d in active_sends 
                         if not (rm.Test() and rd.Test())]
     
     # Wait for all remaining sends to complete
+    comm_start = time.time()
     for req_meta, req_data, _, _ in active_sends:
         req_meta.Wait()
         req_data.Wait()
+    comm_time = time.time() - comm_start
+    total_communication_time += comm_time
     
     comm.send(chunks_processed, dest=0, tag=DONE_TAG)
+    
+    # Send timing data to master (using new tags)
+    timing_data = np.array([total_computation_time, total_communication_time], dtype=np.float64)
+    comm.Send(timing_data, dest=0, tag=DONE_TAG + 1)
+    
+    # Return stats for this worker
+    return {
+        'chunks_processed': chunks_processed,
+        'computation_time': total_computation_time,
+        'communication_time': total_communication_time,
+        'chunk_ids': chunk_ids
+    }
