@@ -36,5 +36,3 @@ tests/test_outputs/
 *.out
 *.err
 
-# Generated scripts
-job_scripts/generated/
