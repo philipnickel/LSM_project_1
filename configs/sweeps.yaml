@@ -27,7 +27,7 @@ experiments:
       n_ranks: [8]
       chunk_size: [4, 8, 16, 32, 64]
       image_shape:
-        - {width: 1000, height: 1000}
+        - {width: 5000, height: 5000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
@@ -44,7 +44,7 @@ experiments:
       n_ranks: [8]
       chunk_size: [8]
       image_shape:
-        - {width: 1000, height: 1000}
+        - {width: 5000, height: 5000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
@@ -62,8 +62,8 @@ experiments:
       n_ranks: [1, 4, 8, 16]
       chunk_size: [8]
       image_shape:
-        - {width: 1000, height: 1000}
-        - {width: 3000, height: 3000}
+        - {width: 5000, height: 5000}
+        - {width: 10000, height: 10000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
@@ -73,7 +73,7 @@ experiments:
     resources:
       queue: hpcintro
       n_cores: 16
-      walltime: "00:20"
+      walltime: "00:30"
       mem_per_core: "3GB"
       span: "hosts=1"
     sweep:
@@ -85,6 +85,7 @@ experiments:
         - {width: 1000, height: 1000}
         - {width: 5000, height: 5000}
         - {width: 10000, height: 10000}
+        - {width: 20000, height: 20000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
