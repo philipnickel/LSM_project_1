@@ -1,73 +1,24 @@
-# Mandelbrot MPI Project
+# Mandelbrot MPI
 
+High-level workflow for the Mandelbrot MPI experiments with MLflow tracking.
 
-## Project Structure
+## Workflow
 
-```
-├── main.py                    # Main entry point
-├── Mandelbrot/                   # Modular helper scripts
-│   ├── Communication.py            # Helper for Communication 
-│   ├── scheduling.py        # Helper for scheduling
-│   ├── computation.py        # Helper for Mandelbrot computations
-├── tests/                     # Tests 
-│   ├── baseline_data/         # Reference data arrays
-│   ├── Mandelbrot.py          # Original baseline script
-│   ├── generate_baseline.sh   # Baseline generation
-│   └── test_runner.sh         # Universal test runner (tests all available sizes)
-├── Assignment_description/    # Project assignment documents
-├── Makefile                   # Build and test automation
-└── requirements.txt           # Python dependencies
-```
-## Installation
+- **Install UV**: `curl -LsSf https://astral.sh/uv/install.sh | sh` 
 
-### 1. Clone the Repository
+- **Install deps**: `uv sync`
+- **IMPORTANT** run `module load mpi/5.0.8-gcc-13.4.0-binutils-2.44` before if on HPC
 
-```bash
-git clone <repository-url>
-cd LSM_project_1
-```
+- **Configure sweeps**: edit `configs/sweeps.yaml` (suites + resources).
 
-### 2. Create Virtual Environment
+- **Auth MLflow**: `uv run python setup.py` to cache Databricks creds, or set `MLFLOW_TRACKING_URI` for another tracker (can be local).
+host: https://dbc-6756e917-e5fc.cloud.databricks.com/ml/experiments/3399934008965459?o=2967813328041853
+token: (find on Databricks under settings->developer->Access Token and generate new one)
 
-```bash
-# Create virtual environment
-python -m venv .venv
+- **Run tests**: `uv run pytest` (uses `SKIP_MLFLOW=1` automatically via test harness).
 
-# Activate virtual environment
-# On macOS/Linux:
-source .venv/bin/activate
-# On Windows:
-# .venv\Scripts\activate
-```
+- **Run locally**: `uv run python main.py --n-ranks 4 --chunk-size 20` or `uv run python main.py --sweep configs/sweeps.yaml --suite TESTS`.
 
-### 3. Install Dependencies
+- **Generate HPC job script**: `uv run python job_scripts/generate_jobscript.py --suite TESTS`, inspect `job_scripts/generated/TESTS.sh`, submit with `bsub < job_scripts/generated/TESTS.sh`.
+- **Post-process runs**: export `MLFLOW_TRACKING_URI` and `MLFLOW_EXPERIMENT_ID`, then `uv run python postprocessing/load_runs.py` for chunk metrics.
 
-```bash
-# Install required packages
-pip install -r requirements.txt
-```
-## Usage
-
-### Basic Commands
-
-```bash
-# Show help and available targets
-python main.py --help
-```
-
-### Direct Script Usage
-
-The `main.py` script is the entry point and allows users to select between blocking/non-blocking and static/dynamic scheduling. It delegates specific operations to the modular helper scripts.
-
-### Command-Line Arguments
-### Example Configurations
-
-```bash
-mpirun -n $N python main.py $CHUNK_SIZE $size --schedule $SCHEDULE --communication $COMMUNICATION --save-data 
-
-```
-### Makefile
-
-# Clean up
-make clean
-```
