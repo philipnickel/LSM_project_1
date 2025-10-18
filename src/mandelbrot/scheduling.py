@@ -13,6 +13,7 @@ __all__ = ["StaticScheduler", "DynamicScheduler"]
 @dataclass
 class StaticScheduler:
     """Static work scheduling - pre-assigns chunks to ranks."""
+
     config: RunConfig
     world_size: int
     assignments: Dict[int, List[int]] = field(init=False)
@@ -31,6 +32,7 @@ class StaticScheduler:
 @dataclass
 class DynamicScheduler:
     """Dynamic work scheduling - assigns chunks on-demand."""
+
     config: RunConfig
     next_chunk: int = 0
 

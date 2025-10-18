@@ -1,8 +1,10 @@
 """Helper script to run MPI computation and save result."""
 
 import sys
+
 import numpy as np
 from mpi4py import MPI
+
 from mandelbrot.config import load_sweep_configs
 from mandelbrot.mpi import run_mpi_computation
 

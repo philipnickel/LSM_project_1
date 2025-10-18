@@ -30,7 +30,10 @@ class RunConfig:
     @property
     def run_name(self) -> str:
         """Generate unique run name embedding all parameters."""
-        return f"{self.schedule}_{self.communication}_n{self.n_ranks}_c{self.chunk_size}_{self.width}x{self.height}"
+        return (
+            f"{self.schedule}_{self.communication}_n{self.n_ranks}_"
+            f"c{self.chunk_size}_{self.width}x{self.height}"
+        )
 
     def to_dict(self) -> dict:
         """Convert to dictionary for MLflow logging."""
@@ -100,7 +103,7 @@ def get_config_by_index(yaml_path: str | Path, index: int) -> RunConfig:
     """Get a specific config by index from sweep."""
     configs = load_sweep_configs(yaml_path)
     if index < 0 or index >= len(configs):
-        raise ValueError(f"Config index {index} out of range [0, {len(configs)-1}]")
+        raise ValueError(f"Config index {index} out of range [0, {len(configs) - 1}]")
     return configs[index]
 
 

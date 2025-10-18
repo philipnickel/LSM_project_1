@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import os
-from typing import Dict, Optional
+from typing import Any, Dict, List, Sequence
 
 import mlflow
-import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
@@ -14,6 +13,8 @@ from .config import RunConfig
 from .report import ChunkReport
 
 DEFAULT_TRACKING_URI = "databricks"
+EXPERIMENT_ID = "3399934008965459"
+EXPERIMENT_FALLBACK_NAME = "mandelbrot_local"
 
 
 def log_to_mlflow(
@@ -22,11 +23,11 @@ def log_to_mlflow(
     suite_name: str = "default",
 ) -> None:
     """Log experiment to MLflow with rendered artifact and raw metrics.
-    
+
     This function is called from within the MPI subprocess. If MLFLOW_RUN_ID
     is set in the environment, it continues an existing run (started by parent).
     Otherwise, it creates a new run.
-    
+
     Args:
         config: Run configuration
         report: Combined outputs (image, timing stats, chunk table)
@@ -38,7 +39,7 @@ def log_to_mlflow(
 
     tracking_uri = _resolve_tracking_uri()
     mlflow.set_tracking_uri(tracking_uri)
-    _ensure_experiment()
+    mlflow.set_experiment(experiment_id=EXPERIMENT_ID)
 
     # Check if parent already started a run
     existing_run_id = os.environ.get("MLFLOW_RUN_ID")
@@ -56,151 +57,60 @@ def log_to_mlflow(
             "suite": suite_name,  # Track which suite this run belongs to (TESTS, chunks, etc.)
         }
 
-        job_id = (
-            os.environ.get("LSB_JOBID")
-        )
+        job_id = os.environ.get("LSB_JOBID")
         if job_id:
             tags["job_id"] = job_id
-            _log_lsf_logs(job_id)
 
         mlflow.set_tags(tags)
 
         chunk_records = report.copy_chunks()
-        chunk_df = None
-        if chunk_records is not None:
-            chunk_df = pd.DataFrame(chunk_records)
-            mlflow.log_table(chunk_df, "chunks.json")
-            mlflow.log_table(_summarize_chunks(chunk_df), "chunks_summary.json")
+        if chunk_records:
+            mlflow.log_table(_records_to_table(chunk_records), "chunks.json")
 
-        _log_core_metrics(config, report.timing, chunk_df)
+        timing_stats = report.timing or {}
+
+        rank_records = timing_stats.get("rank_stats")
+        if isinstance(rank_records, list) and rank_records:
+            mlflow.log_table(_records_to_table(rank_records), "ranks.json")
+
+        mlflow.log_params(config.to_dict())
+
+        wall_time = float(timing_stats.get("wall_time", 0.0))
+        comp_total = float(timing_stats.get("comp_total", 0.0))
+        comm_total = float(timing_stats.get("comm_total", 0.0))
+        comm_send_total = float(timing_stats.get("comm_send_total", 0.0))
+        comm_recv_total = float(timing_stats.get("comm_recv_total", 0.0))
+        total_chunks = float(timing_stats.get("total_chunks", 0))
+
+        metrics = {
+            "wall_time": wall_time,
+            "comp_total": comp_total,
+            "comm_total": comm_total,
+            "comm_send_total": comm_send_total,
+            "comm_recv_total": comm_recv_total,
+            "total_chunks": total_chunks,
+        }
+        for key, value in metrics.items():
+            mlflow.log_metric(key, value)
+
         if report.image is not None:
-            _log_image_fig(report.image, "figures/mandelbrot.png")
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.imshow(report.image.T)
+            mlflow.log_figure(fig, "figures/mandelbrot.png")
+            plt.close(fig)
 
         print(f"[MLflow] Logged run: {config.run_name} (suite: {suite_name})")
         print(f"[MLflow] Run ID: {run.info.run_id}")
 
 
-def _log_core_metrics(
-    config: RunConfig,
-    timing_stats: dict,
-    chunk_df: Optional[pd.DataFrame],
-) -> None:
-    mlflow.log_params(config.to_dict())
+def _records_to_table(chunk_records: Sequence[Dict[str, Any]]) -> Dict[str, List[Any]]:
+    """Convert row-wise chunk records into MLflow table format."""
 
-    metrics: Dict[str, float] = {
-        "total_time": float(timing_stats.get("total_time", 0.0)),
-        "total_comp_time": float(timing_stats.get("total_comp_time", 0.0)),
-        "total_comm_time": float(timing_stats.get("total_comm_time", 0.0)),
-        "comp_std": float(timing_stats.get("comp_std", 0.0)),
-        "comm_std": float(timing_stats.get("comm_std", 0.0)),
-        "total_chunks": float(timing_stats.get("total_chunks", 0)),
-    }
-    total_pixels = config.width * config.height
-    metrics["total_pixels"] = total_pixels
+    frame = pd.DataFrame.from_records(chunk_records)
+    return frame.to_dict(orient="list")
 
-    total_comp = metrics["total_comp_time"]
-    total_comm = metrics["total_comm_time"]
-    if total_comp is not None and total_comm is not None and total_pixels > 0:
-        metrics["time_per_pixel"] = (total_comp + total_comm) / total_pixels
-    elif metrics["total_time"] and total_pixels > 0:
-        metrics["time_per_pixel"] = metrics["total_time"] / total_pixels
-
-    metrics.update(_aggregate_rank_metrics(timing_stats))
-    if chunk_df is not None and not chunk_df.empty:
-        metrics.update(_aggregate_chunk_metrics(chunk_df))
-
-    mlflow.log_metrics(metrics)
-
-
-def _log_image_fig(image: np.ndarray, artifact_path: str) -> None:
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.imshow(image.T, cmap="viridis", origin="lower")
-    ax.set_axis_off()
-    mlflow.log_figure(fig, artifact_path)
-    plt.close(fig)
-
-
-def _summarize_chunks(chunk_df: pd.DataFrame) -> pd.DataFrame:
-    summary = (
-        chunk_df.groupby("rank", dropna=False)["comp_time"]
-        .agg(mean="mean", std="std", min="min", max="max", count="count", sum="sum")
-        .reset_index()
-        .rename(columns={"sum": "total_comp_time"})
-    )
-    return summary
-
-
-def _aggregate_rank_metrics(timing_stats: dict) -> Dict[str, float]:
-    comp_times = [
-        float(value)
-        for key, value in timing_stats.items()
-        if key.startswith("rank_") and key.endswith("_comp")
-    ]
-    comm_times = [
-        float(value)
-        for key, value in timing_stats.items()
-        if key.startswith("rank_") and key.endswith("_comm")
-    ]
-    metrics: Dict[str, float] = {}
-    if comp_times:
-        metrics["avg_rank_comp_time"] = float(np.mean(comp_times))
-        metrics["rank_comp_time_std"] = float(np.std(comp_times))
-    if comm_times:
-        metrics["avg_rank_comm_time"] = float(np.mean(comm_times))
-        metrics["rank_comm_time_std"] = float(np.std(comm_times))
-    return metrics
-
-
-def _aggregate_chunk_metrics(chunk_df: pd.DataFrame) -> Dict[str, float]:
-    metrics: Dict[str, float] = {}
-    comp_series = chunk_df["comp_time"].dropna()
-    if not comp_series.empty:
-        metrics["avg_chunk_comp_time"] = float(comp_series.mean())
-        metrics["chunk_comp_time_std"] = float(comp_series.std(ddof=0))
-        metrics["max_chunk_comp_time"] = float(comp_series.max())
-        metrics["min_chunk_comp_time"] = float(comp_series.min())
-    return metrics
-
-
-def _ensure_experiment() -> None:
-    """Set active experiment using Databricks experiment ID or fallback to local."""
-    experiment_id = os.environ.get("MLFLOW_EXPERIMENT_ID", "3399934008965459")
-    # Always use MandelBrot_HPC experiment
-    mlflow.set_experiment(experiment_id=experiment_id)
 
 
 def _resolve_tracking_uri() -> str:
-    """Resolve tracking URI, preferring Databricks when credentials are present."""
-    uri = os.environ.get("MLFLOW_TRACKING_URI") or DEFAULT_TRACKING_URI
-    return _normalize_tracking_uri(uri)
-
-
-def _normalize_tracking_uri(uri: str) -> str:
-    """Ensure bare paths are converted to valid file:// URIs."""
-    if uri == "databricks" or uri.startswith("databricks:"):
-        return uri
-    if uri.startswith("file://") or "://" in uri:
-        return uri
-    return f"file://{uri}"
-
-
-def _log_lsf_logs(job_id: str) -> None:
-    """Log LSF stdout/stderr files as MLflow artifacts if they exist.
-    
-    This captures the full job output including module loads, uv sync, etc.
-    """
-    from pathlib import Path
-
-    # Try environment variables first (set in job_template.sh)
-    stdout_path = os.environ.get("MLFLOW_LSF_STDOUT")
-    stderr_path = os.environ.get("MLFLOW_LSF_STDERR")
-
-    for log_type, log_path in [("stdout", stdout_path), ("stderr", stderr_path)]:
-        if log_path:
-            log_file = Path(log_path)
-            if log_file.exists():
-                try:
-                    mlflow.log_artifact(str(log_file), artifact_path="lsf_logs")
-                    print(f"[MLflow] Logged {log_type}: {log_file.name}")
-                except Exception as e:
-                    print(f"[MLflow] Warning: Could not log {log_file}: {e}")
+    """Resolve tracking URI."""
+    return os.environ.get("MLFLOW_TRACKING_URI") or DEFAULT_TRACKING_URI

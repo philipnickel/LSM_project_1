@@ -13,11 +13,10 @@ class ChunkReport:
     """Container for outputs produced by ``run_mpi_computation``."""
 
     image: Optional[np.ndarray]
-    timing: Dict[str, float]
-    chunks: Optional[List[Dict[str, Any]]]  # List of chunk records, not DataFrame
+    timing: Dict[str, Any]
+    chunks: Optional[List[Dict[str, Any]]]
 
     def copy_chunks(self) -> Optional[List[Dict[str, Any]]]:
-        """Return a defensive copy of the chunk records if present."""
         if self.chunks is None:
             return None
         return [record.copy() for record in self.chunks]

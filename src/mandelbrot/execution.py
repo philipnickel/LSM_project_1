@@ -12,7 +12,7 @@ from typing import Optional
 from mpi4py import MPI
 
 from .config import RunConfig, load_sweep_configs
-from .logging import log_to_mlflow
+from .logging import EXPERIMENT_ID, _resolve_tracking_uri, log_to_mlflow
 from .mpi import run_mpi_computation
 
 
@@ -47,8 +47,8 @@ def run_single_experiment(
 
     log_to_mlflow(config, report, suite)
 
-    total_time = report.timing.get("total_time", 0.0)
-    print(f"[Timing] Total: {total_time:.4f}s")
+    wall_time = report.timing.get("wall_time", 0.0)
+    print(f"[Timing] Total: {wall_time:.4f}s")
 
 
 def run_sweep(
@@ -73,7 +73,7 @@ def run_sweep(
 
     if task_id is not None:
         if task_id < 0 or task_id >= len(configs):
-            print(f"ERROR: task-id {task_id} out of range [0, {len(configs)-1}]", file=sys.stderr)
+            print(f"ERROR: task-id {task_id} out of range [0, {len(configs) - 1}]", file=sys.stderr)
             return 1
         config = configs[task_id]
         print(f"[Task {task_id}] Running: {config.run_name}")
@@ -140,16 +140,13 @@ def run_single_config_subprocess(
     # Skip MLflow logging in test mode
     skip_mlflow = os.environ.get("SKIP_MLFLOW")
 
-    # Start MLflow run in parent process (if not skipped)
     import mlflow
-
-    from .logging import _ensure_experiment, _resolve_tracking_uri
 
     run_context = None
     if not skip_mlflow:
         tracking_uri = _resolve_tracking_uri()
         mlflow.set_tracking_uri(tracking_uri)
-        _ensure_experiment()
+        mlflow.set_experiment(experiment_id=EXPERIMENT_ID)
         run_context = mlflow.start_run(run_name=config.run_name)
         run_context.__enter__()
 
@@ -158,11 +155,11 @@ def run_single_config_subprocess(
     if suite_name:
         env["MANDELBROT_SUITE"] = suite_name
 
-    # Pass the active run_id to subprocess so it can continue the same run
+    # Pass the active run_id to subprocess
     if run_context:
         env["MLFLOW_RUN_ID"] = run_context.info.run_id
 
-    # Run subprocess, stream output to console, and capture for MLflow
+    # Run subprocess, and capture for MLflow
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
     stdout_text = ""

@@ -47,7 +47,10 @@ def main():
         if args.task_id is not None and args.suite is None:
             sys.exit("ERROR: --task-id requires --suite")
 
-        suites = load_named_sweep_configs(sweep_path, args.suite) if args.suite else load_named_sweep_configs(sweep_path)
+        if args.suite:
+            suites = load_named_sweep_configs(sweep_path, args.suite)
+        else:
+            suites = load_named_sweep_configs(sweep_path)
 
         exit_code = 0
         for suite_name, configs in suites:
@@ -57,8 +60,18 @@ def main():
         return exit_code
 
     # Handle direct CLI run - all args required
-    if not all([args.n_ranks, args.chunk_size, args.schedule, args.communication, args.image_size]):
-        sys.exit("ERROR: Direct run requires: --n-ranks, --chunk-size, --schedule, --communication, --image-size")
+    required_fields = [
+        args.n_ranks,
+        args.chunk_size,
+        args.schedule,
+        args.communication,
+        args.image_size,
+    ]
+    if not all(required_fields):
+        sys.exit(
+            "ERROR: Direct run requires: --n-ranks, --chunk-size, "
+            "--schedule, --communication, --image-size"
+        )
 
     xlim = tuple(map(float, args.xlim.split(":"))) if args.xlim else (-2.2, 0.75)
     ylim = tuple(map(float, args.ylim.split(":"))) if args.ylim else (-1.3, 1.3)
@@ -79,4 +92,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
