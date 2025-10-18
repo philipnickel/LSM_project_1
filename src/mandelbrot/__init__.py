@@ -3,9 +3,10 @@
 __version__ = "2.0.0"
 
 # Core computation and config - lightweight, imported by MPI workers
-from .config import RunConfig, default_run_config
 from .computation import compute_chunk, compute_full_image
+from .config import RunConfig, default_run_config
 from .report import ChunkReport
+
 
 # Conditional imports - only loaded when needed
 def __getattr__(name):

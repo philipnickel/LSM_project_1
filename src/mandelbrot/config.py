@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict, replace
+from dataclasses import asdict, dataclass, replace
 from itertools import product
 from pathlib import Path
-from typing import Dict, List, Tuple, Iterable
+from typing import Dict, Iterable, List, Tuple
 
 import yaml
 
@@ -22,7 +22,6 @@ class RunConfig:
     height: int
     xlim: Tuple[float, float] = (-2.2, 0.75)
     ylim: Tuple[float, float] = (-1.3, 1.3)
-    max_iter: int = 100
 
     @property
     def total_chunks(self) -> int:
@@ -63,7 +62,6 @@ DEFAULT_RUN_CONFIG = RunConfig(
     height=100,
     xlim=(-2.2, 0.75),
     ylim=(-1.3, 1.3),
-    max_iter=100,
 )
 
 

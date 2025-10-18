@@ -36,3 +36,5 @@ tests/test_outputs/
 *.out
 *.err
 
+# Postprocessing outputs
+_exp_mlcache

@@ -1,24 +1,16 @@
 """Baseline (serial) Mandelbrot implementation."""
 
 from __future__ import annotations
-
 import sys
 from typing import TYPE_CHECKING, Tuple
-
 import numpy as np
+from .config import default_run_config, RunConfig
 
-try:  # pragma: no cover - keeps script usable via direct invocation
-    from .config import default_run_config
-except ImportError:  # pragma: no cover
-    from config import default_run_config  # type: ignore
-
-if TYPE_CHECKING:
-    from .config import RunConfig
 
 DEFAULT_CONFIG = default_run_config()
 
 
-def compute_mandelbrot(size: Tuple[int, int], xlim, ylim, max_iter: int = 100) -> np.ndarray:
+def compute_mandelbrot(size: Tuple[int, int], xlim, ylim) -> np.ndarray:
     """Compute Mandelbrot set for provided bounds."""
     width, height = size
     image = np.zeros(size, dtype=float)
@@ -31,20 +23,13 @@ def compute_mandelbrot(size: Tuple[int, int], xlim, ylim, max_iter: int = 100) -
         for y in range(height):
             c = cx + complex(0, ylim[0] + y * yconst)
             z = 0
-            for i in range(max_iter):
+            for i in range(100):
                 z = z * z + c
                 if np.abs(z) > 2:
                     image[x, y] = i
                     break
 
     return image
-
-
-def compute_baseline(config: "RunConfig") -> np.ndarray:
-    """Compute Mandelbrot set for a configuration (used by regression tests)."""
-    size = (config.width, config.height)
-    max_iter = getattr(config, "max_iter", DEFAULT_CONFIG.max_iter)
-    return compute_mandelbrot(size, config.xlim, config.ylim, max_iter)
 
 
 def _print_usage(script: str) -> None:
@@ -96,7 +81,7 @@ ylim = {ylim}
 """
     )
 
-    compute_mandelbrot(size, xlim, ylim, DEFAULT_CONFIG.max_iter)
+    compute_mandelbrot(size, xlim, ylim)
     return 0
 
 

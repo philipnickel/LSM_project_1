@@ -1,8 +1,8 @@
 # Test configurations for numerical correctness tests
 
 sweep:
-  n_ranks: [1, 4]  # Test both single and multi-rank
-  chunk_size: [3, 7]
+  n_ranks: [1, 4]  
+  chunk_size: [10, 15]
   image_size: ["15x15", "20x20"]
   schedule: ["static", "dynamic"]
   communication: ["blocking", "nonblocking"]

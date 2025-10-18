@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Generate LSF job script for a suite."""
 import argparse
-import subprocess
 import os
+import subprocess
 from pathlib import Path
+
 import yaml
+
 from mandelbrot.config import load_named_sweep_configs
 
 parser = argparse.ArgumentParser()
@@ -37,7 +39,7 @@ env.update({
 
 # Render template with envsubst
 with open("job_scripts/job_template.sh", "rb") as f:
-    result = subprocess.run(["envsubst"], input=f.read(), stdout=subprocess.PIPE, 
+    result = subprocess.run(["envsubst"], input=f.read(), stdout=subprocess.PIPE,
                           check=True, env=env)
 
 # Save to job_scripts/generated/

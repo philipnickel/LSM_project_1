@@ -139,11 +139,12 @@ def run_single_config_subprocess(
 
     # Skip MLflow logging in test mode
     skip_mlflow = os.environ.get("SKIP_MLFLOW")
-    
+
     # Start MLflow run in parent process (if not skipped)
     import mlflow
-    from .logging import _resolve_tracking_uri, _ensure_experiment
-    
+
+    from .logging import _ensure_experiment, _resolve_tracking_uri
+
     run_context = None
     if not skip_mlflow:
         tracking_uri = _resolve_tracking_uri()
@@ -156,7 +157,7 @@ def run_single_config_subprocess(
 
     if suite_name:
         env["MANDELBROT_SUITE"] = suite_name
-    
+
     # Pass the active run_id to subprocess so it can continue the same run
     if run_context:
         env["MLFLOW_RUN_ID"] = run_context.info.run_id

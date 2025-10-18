@@ -36,7 +36,7 @@ def compute_chunk(config: RunConfig, chunk_id: int) -> Tuple[int, int, np.ndarra
         for y in range(config.height):
             c = cx + complex(0, ylim_0 + y * yconst)
             z = 0
-            for i in range(config.max_iter):
+            for i in range(100):
                 z = z * z + c
                 if np.abs(z) > 2:
                     chunk[local_x, y] = i

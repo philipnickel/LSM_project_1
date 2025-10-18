@@ -7,7 +7,7 @@ experiments:
       mem_per_core: "2GB"
       span: "hosts=1"
     sweep:
-      n_ranks: [1]
+      n_ranks: [4]
       chunk_size: [10] 
       image_shape:
         - {width: 50, height: 50}

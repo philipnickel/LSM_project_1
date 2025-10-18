@@ -107,14 +107,14 @@ def run_mpi_computation(config: RunConfig) -> Tuple[np.ndarray | None, Dict, Lis
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
-    
+
     start_time = MPI.Wtime()
-    
+
     if config.schedule == "static":
         image, rank_times, chunk_records = _run_static(comm, config, rank, size)
     else:
         image, rank_times, chunk_records = _run_dynamic(comm, config, rank, size)
-    
+
     # Gather timing stats and per-chunk records to rank 0
     all_times = comm.gather(rank_times, root=0)
     all_chunks = comm.gather(chunk_records, root=0)
@@ -159,7 +159,7 @@ def _run_static(
     comm_start = MPI.Wtime()
     image = _gather_results(comm, config, results, rank, size, config.communication)
     comm_time = MPI.Wtime() - comm_start
-    
+
     return image, {"comp": comp_time, "comm": comm_time, "chunks": len(chunk_ids)}, chunk_details
 
 
@@ -192,7 +192,7 @@ def _run_dynamic(
             image[start:end, :] = chunk
 
         return image, {"comp": total_comp, "comm": 0.0, "chunks": len(results)}, chunk_details
-    
+
     # Rank 0 is master, others are workers
     if rank == 0:
         image, stats, chunk_details = _master_dynamic(comm, config, size)
@@ -210,14 +210,14 @@ def _master_dynamic(
     """Master rank for dynamic scheduling."""
     scheduler = DynamicScheduler(config)
     image = allocate_image(config)
-    
+
     total_comp = 0.0
     chunk_details: List[Dict] = []
 
     # Process master's own chunks while managing workers
     master_chunks = 0
     active_workers = size - 1
-    
+
     # Initial assignment to all workers
     for worker in range(1, size):
         if not _assign_chunk(comm, scheduler, worker):
@@ -276,13 +276,13 @@ def _worker_dynamic(
     comm_time = 0.0
     chunks_done = 0
     chunk_details: List[Dict] = []
-    
+
     while True:
         # Get assignment
         comm_start = MPI.Wtime()
         chunk_id = comm.recv(source=0, tag=ASSIGN_TAG)
         comm_time += MPI.Wtime() - comm_start
-        
+
         if chunk_id == -1:  # Done signal
             _rank_log(rank, f"Received shutdown signal after {chunks_done} chunks")
             break

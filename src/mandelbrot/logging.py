@@ -7,8 +7,8 @@ from typing import Dict, Optional
 
 import mlflow
 import numpy as np
-from matplotlib import pyplot as plt
 import pandas as pd
+from matplotlib import pyplot as plt
 
 from .config import RunConfig
 from .report import ChunkReport
@@ -35,21 +35,21 @@ def log_to_mlflow(
     # Skip logging in test mode
     if os.environ.get("SKIP_MLFLOW"):
         return
-    
+
     tracking_uri = _resolve_tracking_uri()
     mlflow.set_tracking_uri(tracking_uri)
     _ensure_experiment()
 
     # Check if parent already started a run
     existing_run_id = os.environ.get("MLFLOW_RUN_ID")
-    
+
     if existing_run_id:
         # Continue existing run (parent process started it)
         run_context = mlflow.start_run(run_id=existing_run_id)
     else:
         # Create new run (standalone execution)
         run_context = mlflow.start_run(run_name=config.run_name)
-    
+
     with run_context as run:
         tags = {
             "schedule": config.schedule,
@@ -200,11 +200,11 @@ def _log_lsf_logs(job_id: str) -> None:
     This captures the full job output including module loads, uv sync, etc.
     """
     from pathlib import Path
-    
+
     # Try environment variables first (set in job_template.sh)
     stdout_path = os.environ.get("MLFLOW_LSF_STDOUT")
     stderr_path = os.environ.get("MLFLOW_LSF_STDERR")
-    
+
     for log_type, log_path in [("stdout", stdout_path), ("stderr", stderr_path)]:
         if log_path:
             log_file = Path(log_path)

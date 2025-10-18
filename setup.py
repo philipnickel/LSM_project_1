@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-"""One-time Databricks credential bootstrap for MLflow."""
-
 from __future__ import annotations
 
 import mlflow
@@ -14,7 +11,8 @@ def main() -> None:
     mlflow.set_experiment(experiment_id="3399934008965459")
     with mlflow.start_run():
         mlflow.log_param("setup_ping", "ok")
-    print("[setup] Verification succeeded. You're ready to run experiments.")
+
+    print("[setup] Verification succeeded.")
 
 
 if __name__ == "__main__":
