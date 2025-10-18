@@ -4,7 +4,7 @@ import subprocess
 
 
 def test_tests_suite():
-    """Run TESTS suite end-to-end - should complete without errors. Mainly to assert logging to mlflow works. """
+    """Run TESTS suite end-to-end - should complete without errors. Mainly to assert connection to mlflow works. """
     result = subprocess.run([
         "python", "main.py",
         "--sweep", "configs/sweeps.yaml",

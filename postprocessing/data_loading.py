@@ -134,22 +134,51 @@ print(f"[info] chunks: {len(chunks_df)} rows from {len(dfs)} runs | missing: {le
 if missing[:5]:
     print("[warn] missing examples:", missing[:5])
 
-chunk_levels = [
-    c
-    for c in [
-        "schedule",
-        "communication",
-        "n_ranks",
-        "chunk_size",
-        "domain",
-        "image_size",
-        "run_id",
-        "rank",
-        "chunk_id",
+if not chunks_df.empty:
+    expected = ["rank", "chunk_id", "comp_time", "comm_time"]
+    missing_cols = [c for c in expected if c not in chunks_df.columns]
+    if missing_cols:
+        print("[warn] missing columns in chunks_df:", missing_cols)
+
+    for col in ["n_ranks", "chunk_size", "rank", "chunk_id"]:
+        if col in chunks_df.columns:
+            chunks_df[col] = pd.to_numeric(
+                chunks_df[col], errors="coerce"
+            ).astype("Int64")
+
+    for col in ["comp_time", "comm_time", "start_time", "end_time"]:
+        if col in chunks_df.columns:
+            chunks_df[col] = pd.to_numeric(chunks_df[col], errors="coerce")
+
+    for col, categories in {
+        "schedule": ["static", "dynamic"],
+        "communication": ["blocking", "nonblocking"],
+    }.items():
+        if col in chunks_df.columns:
+            chunks_df[col] = pd.Categorical(
+                chunks_df[col], categories=categories, ordered=True
+            )
+
+    chunk_levels = [
+        c
+        for c in [
+            "schedule",
+            "communication",
+            "n_ranks",
+            "chunk_size",
+            "domain",
+            "image_size",
+            "run_id",
+            "rank",
+            "chunk_id",
+        ]
+        if c in chunks_df.columns
     ]
-    if c in chunks_df.columns
-]
-chunks_idx = chunks_df.set_index(chunk_levels).sort_index()
+
+    chunks_idx = chunks_df.set_index(chunk_levels).sort_index()
+    print("[info] chunks index levels:", chunks_idx.index.names)
+else:
+    chunks_idx = chunks_df
 
 # %% ── Save both tables ──────────────────────────────────────────────────────
 runs_df.to_parquet(os.path.join(OUT_DIR, "runs_df.parquet"), index=False)

@@ -52,25 +52,15 @@ def log_to_mlflow(
 
     with run_context as run:
         tags = {
-            "schedule": config.schedule,
-            "communication": config.communication,
-            "n_ranks": config.n_ranks,
-            "chunk_size": config.chunk_size,
-            "image_width": config.width,
-            "image_height": config.height,
             "node_name": os.uname().nodename,
             "suite": suite_name,  # Track which suite this run belongs to (TESTS, chunks, etc.)
         }
 
         job_id = (
             os.environ.get("LSB_JOBID")
-            or os.environ.get("SLURM_JOB_ID")
-            or os.environ.get("PBS_JOBID")
-            or os.environ.get("JOB_ID")
         )
         if job_id:
             tags["job_id"] = job_id
-            # Log LSF stdout/stderr if they exist
             _log_lsf_logs(job_id)
 
         mlflow.set_tags(tags)
