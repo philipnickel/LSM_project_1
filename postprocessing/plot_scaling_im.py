@@ -15,29 +15,37 @@ sns.set_palette("colorblind")
 sns.set_context("talk")
 
 CACHE_DIR = Path("_exp_mlcache")
-RUNS_PATH = CACHE_DIR / "runs_df.parquet"
-RANKS_PATH = CACHE_DIR / "ranks_df.parquet"
+RUNS_IDX_PATH = CACHE_DIR / "runs_indexed.parquet"
+RANKS_IDX_PATH = CACHE_DIR / "ranks_indexed.parquet"
 SUITE = "scaling_im"
 
-for path in (RUNS_PATH, RANKS_PATH):
+for path in (RUNS_IDX_PATH, RANKS_IDX_PATH):
     if not path.exists():
         raise FileNotFoundError(
             f"{path} not found. Run postprocessing/data_loading.py first."
         )
 
-runs = pd.read_parquet(RUNS_PATH)
-if "suite" not in runs.columns:
-    raise KeyError("Column 'suite' missing. Re-run data_loading.py.")
+runs_idx = pd.read_parquet(RUNS_IDX_PATH)
+if runs_idx.index.names[-1] != "Suite":
+    runs_idx.index = runs_idx.index.set_names(
+        [
+            "Schedule",
+            "Communication",
+            "N Ranks",
+            "Chunk Size",
+            "Domain",
+            "Image Size",
+            "Run Id",
+            "Suite",
+        ]
+    )
 
-subset = runs[runs["suite"] == SUITE].copy()
-if subset.empty:
-    raise ValueError(f"No runs found for suite '{SUITE}'.")
+try:
+    subset = runs_idx.xs(SUITE, level="Suite").reset_index()
+except KeyError as exc:
+    raise ValueError(f"No runs found for suite '{SUITE}'") from exc
 
-subset["schedule"] = pd.Categorical(subset["schedule"], ["static", "dynamic"])
-subset["communication"] = pd.Categorical(
-    subset["communication"], ["blocking", "nonblocking"]
-)
-subset["config"] = subset["schedule"].astype(str) + " / " + subset["communication"].astype(str)
+subset["config"] = subset["Schedule"].astype(str) + " / " + subset["Communication"].astype(str)
 
 if "image_pixels" not in subset.columns:
     def _size_to_pixels(value: object) -> float:
@@ -49,13 +57,28 @@ if "image_pixels" not in subset.columns:
                 return float("nan")
         return float("nan")
 
-    subset["image_pixels"] = subset["image_size"].map(_size_to_pixels)
+    subset["image_pixels"] = subset["Image Size"].map(_size_to_pixels)
+
+ranks_idx = pd.read_parquet(RANKS_IDX_PATH)
+if ranks_idx.index.names[-1] != "Suite":
+    ranks_idx.index = ranks_idx.index.set_names(
+        [
+            "Schedule",
+            "Communication",
+            "N Ranks",
+            "Chunk Size",
+            "Domain",
+            "Image Size",
+            "Run Id",
+            "Suite",
+            "rank",
+        ]
+    )
 
 if {"comp_total", "comm_total"}.issubset(subset.columns):
     totals = subset.copy()
 else:
-    ranks = pd.read_parquet(RANKS_PATH)
-    ranks_subset = ranks[ranks.get("suite", "") == SUITE].copy()
+    ranks_subset = ranks_idx.xs(SUITE, level="Suite").reset_index()
     if ranks_subset.empty:
         raise ValueError("Rank-level data required to derive totals.")
     ranks_subset["comm_total"] = (
@@ -63,11 +86,11 @@ else:
         + ranks_subset.get("comm_recv_time", 0.0).fillna(0.0)
     )
     totals = subset.merge(
-        ranks_subset.groupby("run_id", observed=False)[["comp_time", "comm_total"]]
+        ranks_subset.groupby("Run Id", observed=False)[["comp_time", "comm_total"]]
         .sum()
         .reset_index()
         .rename(columns={"comp_time": "comp_total"}),
-        on="run_id",
+        on="Run Id",
         how="left",
     )
 
@@ -84,14 +107,17 @@ fig, ax = plt.subplots(figsize=(12, 8))
 for config, config_df in wall_df.groupby("config"):
     ax.plot(
         config_df["image_pixels"],
-        config_df["wall_time"],
+        config_df["Wall Time(s)"] if "Wall Time(s)" in config_df else config_df["wall_time"],
         marker="o",
         label=config,
     )
     for _, row in config_df.iterrows():
         ax.annotate(
-            row["image_size"],
-            (row["image_pixels"], row["wall_time"]),
+            row.get("Image Size", row.get("image_size")),
+            (
+                row["image_pixels"],
+                row.get("Wall Time(s)", row.get("wall_time")),
+            ),
             textcoords="offset points",
             xytext=(0, 6),
             ha="center",
@@ -110,8 +136,8 @@ plt.close(fig)
 print(f"[plots] saved {out_wall}")
 
 # Compute vs communication totals -------------------------------------------
-bar_df = totals[["config", "image_size", "run_id", "comp_total", "comm_total"]].copy()
-bar_df["label"] = bar_df.apply(lambda r: f"{r['image_size']}\n{r['config']}", axis=1)
+bar_df = totals[["config", "Image Size", "Run Id", "comp_total", "comm_total"]].copy()
+bar_df["label"] = bar_df.apply(lambda r: f"{r['Image Size']}\n{r['config']}", axis=1)
 
 fig, ax = plt.subplots(figsize=(12, 8))
 positions = np.arange(len(bar_df))

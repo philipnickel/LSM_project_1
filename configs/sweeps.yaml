@@ -55,15 +55,15 @@ experiments:
     resources:
       queue: hpcintro
       n_cores: 16
-      walltime: "00:15"
-      mem_per_core: "3GB"
+      walltime: "00:10"
+      mem_per_core: "2GB"
       span: "hosts=1"
     sweep:
-      n_ranks: [1, 4, 8, 16]
+      n_ranks: [1, 4, 8, 10, 16, 20, 24]
       chunk_size: [8]
       image_shape:
-        - {width: 5000, height: 5000}
         - {width: 10000, height: 10000}
+        - {width: 20000, height: 20000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
@@ -73,15 +73,15 @@ experiments:
   - name: scaling_mult_host
     resources:
       queue: hpcintro
-      n_cores: 100
+      n_cores: 50
       walltime: "00:15"
       mem_per_core: "3GB"
     sweep:
-      n_ranks: [30, 50, 75, 100]
+      n_ranks: [20, 30, 40, 50]
       chunk_size: [8]
       image_shape:
-        - {width: 5000, height: 5000}
         - {width: 10000, height: 10000}
+        - {width: 20000, height: 20000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
@@ -98,7 +98,7 @@ experiments:
       span: "hosts=1"
     sweep:
       n_ranks: [16]
-      chunk_size: [8]
+      chunk_size: [30]
       image_shape:
         - {width: 250, height: 250}
         - {width: 500, height: 500}

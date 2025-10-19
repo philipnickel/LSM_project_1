@@ -1,82 +1,70 @@
-# %%
+# %% Imports ---------------------------------------------------------------
 from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Tuple
 
 import numba
 import numpy as np
 import pandas as pd
 
 from mandelbrot.baseline import compute_mandelbrot as baseline_compute
+from mandelbrot.computation import compute_chunk
+from mandelbrot.config import RunConfig
 
-# %%
-
+# %% Benchmark configuration -----------------------------------------------
 XLIM = (-2.2, 0.75)
 YLIM = (-1.3, 1.3)
 SIZES = ["125x125", "250x250", "500x500", "1000x1000", "2000x2000", "4000x4000"]
+THREADS = [1, 2, 4, 8, numba.get_num_threads()]
 MAX_ITER = 100
 
 
-# %%
-@numba.njit(parallel=True)
-def mandelbrot_numba_parallel(size: Tuple[int, int], xlim, ylim, max_iter: int = 100) -> np.ndarray:
-    width, height = size
-    image = np.zeros(size, dtype=np.float64)
-
-    xconst = (xlim[1] - xlim[0]) / width
-    yconst = (ylim[1] - ylim[0]) / height
-
-    for x in numba.prange(width):
-        cx = complex(xlim[0] + x * xconst, 0.0)
-        for y in range(height):
-            c = cx + complex(0.0, ylim[0] + y * yconst)
-            z = 0.0 + 0.0j
-            for i in range(max_iter):
-                z = z * z + c
-                if np.abs(z) > 2.0:
-                    image[x, y] = i
-                    break
-    return image
+# %% Helpers ----------------------------------------------------------------
 
 
-@numba.njit
-def mandelbrot_numba(size: Tuple[int, int], xlim, ylim, max_iter: int = 100) -> np.ndarray:
-    width, height = size
-    image = np.zeros(size, dtype=np.float64)
-
-    xconst = (xlim[1] - xlim[0]) / width
-    yconst = (ylim[1] - ylim[0]) / height
-
-    for x in range(width):
-        cx = complex(xlim[0] + x * xconst, 0.0)
-        for y in range(height):
-            c = cx + complex(0.0, ylim[0] + y * yconst)
-            z = 0.0 + 0.0j
-            for i in range(max_iter):
-                z = z * z + c
-                if np.abs(z) > 2.0:
-                    image[x, y] = i
-                    break
-    return image
+def _make_config(width: int, height: int) -> RunConfig:
+    chunk_size = max(1, min(64, width))
+    return RunConfig(
+        n_ranks=1,
+        chunk_size=chunk_size,
+        schedule="static",
+        communication="blocking",
+        width=width,
+        height=height,
+        xlim=XLIM,
+        ylim=YLIM,
+    )
 
 
-# %%
-# Trigger JIT compilation once so timings below reflect steady-state performance.
-mandelbrot_numba_parallel((64, 64), XLIM, YLIM, 20)
+def _compute_with_numba(cfg: RunConfig, threads: int) -> None:
+    image = np.empty((cfg.width, cfg.height), dtype=np.float64)
+    previous = numba.get_num_threads()
+    numba.set_num_threads(threads)
+    try:
+        for chunk_id in range(cfg.total_chunks):
+            start, end, chunk = compute_chunk(cfg, chunk_id)
+            image[start:end, :] = chunk
+    finally:
+        numba.set_num_threads(previous)
 
-# %%
 
-rows = []
+# Trigger JIT compilation once so timings below reflect steady-state behaviour.
+_warmup_cfg = _make_config(64, 64)
+compute_chunk(_warmup_cfg, 0)
+
+
+# %% Benchmark loop ---------------------------------------------------------
+rows: list[dict[str, object]] = []
 
 for size_str in SIZES:
     width, height = map(int, size_str.lower().split("x"))
-    size = (width, height)
+    size_tuple = (width, height)
+    cfg = _make_config(width, height)
 
     print(f"Running baseline for size {size_str}...")
     start = time.perf_counter()
-    baseline_compute(size, XLIM, YLIM)
+    baseline_compute(size_tuple, XLIM, YLIM)
     baseline_time = time.perf_counter() - start
     rows.append(
         {
@@ -88,35 +76,26 @@ for size_str in SIZES:
         }
     )
 
-    print(f"Running numba (single-threaded) for size {size_str}...")
-    start = time.perf_counter()
-    mandelbrot_numba(size, XLIM, YLIM, MAX_ITER)
-    numba_time = time.perf_counter() - start
-    rows.append(
-        {
-            "Implementation": "Numba",
-            "threads": numba.get_num_threads(),
-            "Image Size": size_str,
-            "Time (s)": numba_time,
-            "numba_threads_actual": numba.get_num_threads(),
-        }
-    )
+    for threads in THREADS:
+        if threads < 1:
+            continue
+        label = "Numba" if threads == 1 else f"Numba ({threads} threads)"
+        print(f"Running {label.lower()} for size {size_str}...")
+        start = time.perf_counter()
+        _compute_with_numba(cfg, threads)
+        elapsed = time.perf_counter() - start
+        rows.append(
+            {
+                "Implementation": label,
+                "threads": threads,
+                "Image Size": size_str,
+                "Time (s)": elapsed,
+                "numba_threads_actual": threads,
+            }
+        )
 
-    print(f"Running numba (multi-threaded) for size {size_str}...")
-    start = time.perf_counter()
-    mandelbrot_numba_parallel(size, XLIM, YLIM, MAX_ITER)
-    numba_time = time.perf_counter() - start
-    rows.append(
-        {
-            "Implementation": "Numba Parallel",
-            "threads": numba.get_num_threads(),
-            "Image Size": size_str,
-            "Time (s)": numba_time,
-            "numba_threads_actual": numba.get_num_threads(),
-        }
-    )
 
-# %%
+# %% Results ----------------------------------------------------------------
 df = pd.DataFrame(rows)
 
 try:

@@ -15,34 +15,58 @@ sns.set_palette("colorblind")
 sns.set_context("talk")
 
 CACHE_DIR = Path("_exp_mlcache")
-RUNS_PATH = CACHE_DIR / "runs_df.parquet"
-RANKS_PATH = CACHE_DIR / "ranks_df.parquet"
-CHUNKS_PATH = CACHE_DIR / "chunks_df.parquet"
+RANKS_IDX_PATH = CACHE_DIR / "ranks_indexed.parquet"
+CHUNKS_IDX_PATH = CACHE_DIR / "chunks_indexed.parquet"
 SUITE = "load_balancing"
 
-for path in (RUNS_PATH, RANKS_PATH, CHUNKS_PATH):
+for path in (RANKS_IDX_PATH, CHUNKS_IDX_PATH):
     if not path.exists():
         raise FileNotFoundError(
             f"{path} not found. Run postprocessing/data_loading.py first."
         )
 
-runs = pd.read_parquet(RUNS_PATH)
-ranks = pd.read_parquet(RANKS_PATH)
-chunks = pd.read_parquet(CHUNKS_PATH)
+ranks_idx = pd.read_parquet(RANKS_IDX_PATH)
+chunks_idx = pd.read_parquet(CHUNKS_IDX_PATH)
 
-for df in (runs, ranks, chunks):
-    if "suite" not in df.columns:
-        raise KeyError("Column 'suite' missing. Re-run data_loading.py.")
+if ranks_idx.index.names[-1] != "Suite":
+    ranks_idx.index = ranks_idx.index.set_names(
+        [
+            "Schedule",
+            "Communication",
+            "N Ranks",
+            "Chunk Size",
+            "Domain",
+            "Image Size",
+            "Run Id",
+            "Suite",
+            "rank",
+        ]
+    )
 
-runs = runs[runs["suite"] == SUITE].copy()
-ranks = ranks[ranks["suite"] == SUITE].copy()
-chunks = chunks[chunks["suite"] == SUITE].copy()
+if chunks_idx.index.names[-1] != "Suite":
+    chunks_idx.index = chunks_idx.index.set_names(
+        [
+            "Schedule",
+            "Communication",
+            "N Ranks",
+            "Chunk Size",
+            "Domain",
+            "Image Size",
+            "Run Id",
+            "Suite",
+            "rank",
+            "chunk_id",
+        ]
+    )
 
-if runs.empty or ranks.empty or chunks.empty:
-    raise ValueError(f"Missing data for suite '{SUITE}'.")
+try:
+    ranks = ranks_idx.xs(SUITE, level="Suite").reset_index()
+    chunks = chunks_idx.xs(SUITE, level="Suite").reset_index()
+except KeyError as exc:
+    raise ValueError(f"Missing data for suite '{SUITE}'") from exc
 
 for df in (ranks, chunks):
-    df["config"] = df["schedule"].astype(str) + " / " + df["communication"].astype(str)
+    df["config"] = df["Schedule"].astype(str) + " / " + df["Communication"].astype(str)
 
 plots_dir = Path("Plots") / SUITE
 plots_dir.mkdir(parents=True, exist_ok=True)
@@ -55,12 +79,12 @@ def sanitize(value: object) -> str:
     return text.strip("_") or "domain"
 
 
-domains = ranks["domain"].dropna().unique()
+domains = ranks["Domain"].dropna().unique()
 
 for domain in domains:
     domain_key = sanitize(domain)
 
-    rank_subset = ranks[ranks["domain"] == domain].copy()
+    rank_subset = ranks[ranks["Domain"] == domain].copy()
     if rank_subset.empty:
         continue
 
@@ -72,8 +96,8 @@ for domain in domains:
         rank_subset["comm_total"] = rank_subset["comm_time"].fillna(0.0)
     else:
         rank_subset["comm_total"] = 0.0
-    rank_subset = rank_subset.sort_values(["config", "run_id", "rank"])
-    unique_series = rank_subset[["run_id", "config"]].drop_duplicates()
+    rank_subset = rank_subset.sort_values(["config", "Run Id", "rank"])
+    unique_series = rank_subset[["Run Id", "config"]].drop_duplicates()
     num_series = len(unique_series)
     ranks_order = sorted(rank_subset["rank"].unique())
     x_positions = np.arange(len(ranks_order), dtype=float)
@@ -83,7 +107,7 @@ for domain in domains:
 
     fig, ax = plt.subplots(figsize=(12, 8))
     for idx, (run_id, config) in enumerate(unique_series.itertuples(index=False, name=None)):
-        data = rank_subset[(rank_subset["run_id"] == run_id) & (rank_subset["config"] == config)]
+        data = rank_subset[(rank_subset["Run Id"] == run_id) & (rank_subset["config"] == config)]
         comp = data.set_index("rank")["comp_time"].reindex(ranks_order, fill_value=0.0)
         comm = data.set_index("rank")["comm_total"].reindex(ranks_order, fill_value=0.0)
         offset = x_positions + (idx - (num_series - 1) / 2) * width
@@ -117,7 +141,7 @@ for domain in domains:
     plt.close(fig)
     print(f"[plots] saved {bar_path}")
 
-    chunk_subset = chunks[chunks["domain"] == domain].copy()
+    chunk_subset = chunks[chunks["Domain"] == domain].copy()
     if chunk_subset.empty:
         continue
 
