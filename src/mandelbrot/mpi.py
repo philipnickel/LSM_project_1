@@ -300,6 +300,11 @@ def _master_dynamic(
         while comm.iprobe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status):
             worker = status.Get_source()
             handle_completion(worker)
+            if active_workers <= 0:
+                break
+
+        if active_workers <= 0:
+            break
 
         comm.probe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status)
         worker = status.Get_source()

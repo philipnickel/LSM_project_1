@@ -2,7 +2,7 @@
 #BSUB -J scaling_im[1-24]
 #BSUB -q hpcintro
 #BSUB -n 16
-#BSUB -W 00:30
+#BSUB -W 00:15
 #BSUB -R "span[hosts=1]"
 #BSUB -R "rusage[mem=5GB]"
 #BSUB -o logs/scaling_im_%J_%I.out
