@@ -1,5 +1,5 @@
 #!/bin/bash
-#BSUB -J scaling_im[1-24]
+#BSUB -J scaling_im[1-12]
 #BSUB -q hpcintro
 #BSUB -n 16
 #BSUB -W 00:15

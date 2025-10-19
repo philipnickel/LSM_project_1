@@ -62,12 +62,9 @@ experiments:
       n_ranks: [16]
       chunk_size: [100]
       image_shape:
-        - {width: 1000, height: 1000}
-        - {width: 5000, height: 5000}
-        - {width: 10000, height: 10000}
-        - {width: 20000, height: 20000}
-        - {width: 30000, height: 30000}
-        - {width: 40000, height: 40000}
+        - {width: 50000, height: 50000}
+        - {width: 60000, height: 60000}
+        - {width: 70000, height: 70000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
