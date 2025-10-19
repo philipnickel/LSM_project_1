@@ -20,12 +20,16 @@ from postprocessing.utils import (
     load_suite_runs,
 )
 
-SUITE = "scaling_mult_host"
+SUITE = "scaling_proc"
 
 
 def prepare_data() -> pd.DataFrame:
     runs_idx = ensure_config_level(load_suite_runs(SUITE, as_index=True))
-    runs = runs_idx.reset_index().sort_values(["Image Size", "N Ranks"])
+    runs = runs_idx.reset_index()
+    runs["N Ranks"] = pd.to_numeric(runs["N Ranks"], errors="coerce")
+    runs = runs.dropna(subset=["N Ranks"])
+    runs["N Ranks"] = runs["N Ranks"].astype(int)
+    runs = runs.sort_values(["Image Size", "N Ranks"])
 
     if {"Comp Total", "Comm Total"}.issubset(runs.columns):
         totals = runs.rename(columns={"Comp Total": "comp_total", "Comm Total": "comm_total"})
@@ -40,6 +44,9 @@ def prepare_data() -> pd.DataFrame:
         agg["comm_total"] = agg["comm_send_time"].fillna(0.0) + agg["comm_recv_time"].fillna(0.0)
         totals = runs.merge(agg[["Run Id", "comp_total", "comm_total"]], on="Run Id", how="left")
     totals["Comm Fraction"] = totals["comm_total"] / (totals["comm_total"] + totals["comp_total"])
+    totals["N Ranks"] = pd.to_numeric(totals["N Ranks"], errors="coerce")
+    totals = totals.dropna(subset=["N Ranks"])
+    totals["N Ranks"] = totals["N Ranks"].astype(int)
     totals = totals.sort_values(["Image Size", "N Ranks"])
     return totals
 
@@ -53,12 +60,13 @@ def plot_wall_time(totals: pd.DataFrame, out_dir: Path) -> None:
         y="Wall Time(s)",
         hue="Config",
         markers=True,
-        dashes = False
+        dashes=False,
         estimator=None,
+        sort=False,
         ax=ax,
         palette=palette,
     )
-    #ax.set_xscale("log")
+    ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("Number of MPI ranks")
     ax.set_ylabel("Wall time [s]")

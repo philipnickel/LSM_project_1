@@ -1,7 +1,7 @@
 #!/bin/bash
-#BSUB -J scaling_mult_host[1-20]
+#BSUB -J scaling_mult_host[1-8]
 #BSUB -q hpcintro
-#BSUB -n 100
+#BSUB -n 70
 #BSUB -W 00:10
 #BSUB -R "span[ptile=10]"
 #BSUB -R "rusage[mem=3GB]"
