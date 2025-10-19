@@ -8,8 +8,15 @@ ${SPAN_DIRECTIVE}
 #BSUB -o logs/${JOB_NAME}_%J_%I.out
 #BSUB -e logs/${JOB_NAME}_%J_%I.err
 
+module purge
 module load python3/3.11.1
 module load mpi/5.0.8-gcc-13.4.0-binutils-2.44
+
+
+# optional safety if you had crashes:
+export OMPI_MCA_hwloc_base_binding_policy=none
+export OMPI_MCA_rmaps_base_oversubscribe=1
+
 
 cd "${LSB_SUBCWD}"
 mkdir -p logs/${JOB_NAME}
