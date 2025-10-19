@@ -58,7 +58,7 @@ def plot_wall_time(totals: pd.DataFrame, out_dir: Path) -> None:
         ax=ax,
         palette=palette,
     )
-    ax.set_xscale("log")
+    #ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel("Number of MPI ranks")
     ax.set_ylabel("Wall time [s]")
@@ -68,56 +68,11 @@ def plot_wall_time(totals: pd.DataFrame, out_dir: Path) -> None:
     plt.close(fig)
 
 
-def plot_comm_breakdown(totals: pd.DataFrame, out_dir: Path) -> None:
-    melted = totals.melt(
-        id_vars=["N Ranks", "Config", "Image Size"],
-        value_vars=["comp_total", "comm_total"],
-        var_name="Metric",
-        value_name="Time",
-    )
-    g = sns.catplot(
-        data=melted,
-        kind="bar",
-        x="N Ranks",
-        y="Time",
-        hue="Metric",
-        col="Config",
-        row="Image Size",
-        sharey=False,
-        height=4,
-        aspect=1.2,
-    )
-    g.set_axis_labels("Number of MPI ranks", "Time [s]")
-    g.fig.suptitle("Computation vs Communication by Rank Count", y=1.02)
-    g.fig.savefig(out_dir / "5.2_comm_breakdown_vs_ranks.pdf", bbox_inches="tight")
-    plt.close(g.fig)
-
-
-def plot_comm_fraction(totals: pd.DataFrame, out_dir: Path) -> None:
-    g = sns.catplot(
-        data=totals,
-        kind="bar",
-        x="N Ranks",
-        y="Comm Fraction",
-        hue="Config",
-        col="Image Size",
-        sharey=False,
-        height=4,
-        aspect=1.2,
-    )
-    g.set_axis_labels("Number of MPI ranks", "Communication fraction")
-    g.fig.suptitle("Communication Fraction vs Rank Count", y=1.02)
-    g.fig.savefig(out_dir / "5.3_comm_fraction_vs_ranks.pdf", bbox_inches="tight")
-    plt.close(g.fig)
-
-
 def main() -> None:
     ensure_style()
     totals = prepare_data()
     out_dir = ensure_output_dir(PLOTS_DIR / "5_scaling_ranks")
     plot_wall_time(totals, out_dir)
-    plot_comm_breakdown(totals, out_dir)
-    plot_comm_fraction(totals, out_dir)
 
 
 if __name__ == "__main__":
