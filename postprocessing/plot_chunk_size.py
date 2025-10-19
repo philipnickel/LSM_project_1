@@ -183,7 +183,7 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
                         f"{int(chunk_size)}",
                         ha="center",
                         va="bottom",
-                        fontsize=6,
+                        fontsize=4,
                     )
 
                 if not legend_handles:
@@ -212,7 +212,7 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
                 frameon=False,
             )
 
-        domain_title = f"Rank mean compute vs communication time\nDomain: {domain}"
+        domain_title = f"\nDomain: {domain}"
         fig.suptitle(domain_title, y=0.98)
         fig.tight_layout(rect=[0, 0, 1, 0.95])
 
