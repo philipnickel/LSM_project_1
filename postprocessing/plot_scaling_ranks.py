@@ -12,8 +12,8 @@ if __package__ is None or __package__ == "":
 
 from postprocessing.utils import (
     PLOTS_DIR,
-    config_label,
     config_palette,
+    ensure_config_level,
     ensure_output_dir,
     ensure_style,
     load_suite_ranks,
@@ -24,35 +24,22 @@ SUITE = "scaling_proc"
 
 
 def prepare_data() -> pd.DataFrame:
-    runs = load_suite_runs(SUITE)
-    runs["Config"] = [
-        config_label(s, c) for s, c in zip(runs["Schedule"], runs["Communication"])
-    ]
-    runs = runs.sort_values(["Image Size", "N Ranks"])
+    runs_idx = ensure_config_level(load_suite_runs(SUITE, as_index=True))
+    runs = runs_idx.reset_index().sort_values(["Image Size", "N Ranks"])
 
     if {"Comp Total", "Comm Total"}.issubset(runs.columns):
         totals = runs.rename(columns={"Comp Total": "comp_total", "Comm Total": "comm_total"})
     else:
-        ranks = load_suite_ranks(SUITE)
-        ranks["config"] = [
-            config_label(s, c) for s, c in zip(ranks["Schedule"], ranks["Communication"])
-        ]
-        ranks["comm_total"] = (
-            ranks.get("comm_send_time", 0.0).fillna(0.0)
-            + ranks.get("comm_recv_time", 0.0).fillna(0.0)
-        )
-        totals = runs.merge(
-            ranks.groupby("Run Id", observed=False)[["comp_time", "comm_total"]]
+        ranks_idx = ensure_config_level(load_suite_ranks(SUITE, as_index=True))
+        agg = (
+            ranks_idx.groupby(level="Run Id")[["comp_time", "comm_send_time", "comm_recv_time"]]
             .sum()
+            .rename(columns={"comp_time": "comp_total"})
             .reset_index()
-            .rename(columns={"comp_time": "comp_total"}),
-            on="Run Id",
-            how="left",
         )
+        agg["comm_total"] = agg["comm_send_time"].fillna(0.0) + agg["comm_recv_time"].fillna(0.0)
+        totals = runs.merge(agg[["Run Id", "comp_total", "comm_total"]], on="Run Id", how="left")
     totals["Comm Fraction"] = totals["comm_total"] / (totals["comm_total"] + totals["comp_total"])
-    totals["Config"] = [
-        config_label(s, c) for s, c in zip(totals["Schedule"], totals["Communication"])
-    ]
     totals = totals.sort_values(["Image Size", "N Ranks"])
     return totals
 

@@ -12,8 +12,8 @@ if __package__ is None or __package__ == "":
 
 from postprocessing.utils import (
     PLOTS_DIR,
-    config_label,
     config_palette,
+    ensure_config_level,
     ensure_output_dir,
     ensure_style,
     load_suite_runs,
@@ -23,8 +23,8 @@ SUITE = "scaling_im"
 
 
 def prepare_runs() -> pd.DataFrame:
-    runs = load_suite_runs(SUITE)
-    runs["Config"] = runs.apply(lambda r: config_label(r["Schedule"], r["Communication"]), axis=1)
+    runs_idx = ensure_config_level(load_suite_runs(SUITE, as_index=True))
+    runs = runs_idx.reset_index()
     runs["Pixels"] = runs["Image Size"].str.lower().str.split("x").apply(
         lambda parts: int(parts[0]) * int(parts[1])
     )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -12,10 +12,10 @@ if __package__ is None or __package__ == "":
 
 from postprocessing.utils import (
     PLOTS_DIR,
-    config_label,
     config_palette,
     ensure_output_dir,
     ensure_style,
+    ensure_config_level,
     load_suite_chunks,
     load_suite_ranks,
     load_suite_runs,
@@ -24,16 +24,21 @@ from postprocessing.utils import (
 SUITE = "chunks"
 
 
-def select_representative_runs(runs: pd.DataFrame) -> set[str]:
-    reps: set[str] = set()
-    grouped = runs.groupby(["Chunk Size", "Config"], observed=False)
-    for _, group in grouped:
-        stats = group.groupby("Run Id", observed=False)["Wall Time(s)"].mean().sort_values()
-        if stats.empty:
-            continue
-        rep = stats.index[len(stats) // 2]
-        reps.add(rep)
-    return reps
+def select_representative_runs(runs_idx: pd.DataFrame) -> set[str]:
+    series = (
+        runs_idx["Wall Time(s)"]
+        .groupby(level=["Chunk Size", "Config", "Run Id"], observed=False)
+        .mean()
+    )
+
+    def _pick_median(group: pd.Series) -> str | None:
+        if group.empty:
+            return None
+        ordered = group.sort_values()
+        return ordered.index[len(ordered) // 2][-1]
+
+    reps = series.groupby(level=["Chunk Size", "Config"], observed=False).apply(_pick_median)
+    return {rep for rep in reps.dropna().astype(str)}
 
 
 def plot_runtime_vs_chunk_size(runs: pd.DataFrame, out_dir: Path) -> None:
@@ -80,14 +85,12 @@ def prep_rank_totals(ranks: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([comp, comm_df], ignore_index=True)
 
 
-def plot_rank_bars(ranks: pd.DataFrame, chunks: pd.DataFrame, out_dir: Path) -> None:
+def plot_rank_bars(
+    ranks: pd.DataFrame,
+    chunk_counts: pd.DataFrame,
+    out_dir: Path,
+) -> None:
     melted = prep_rank_totals(ranks)
-
-    chunk_counts = (
-        chunks.groupby(["Chunk Size", "Config", "Run Id", "rank"], observed=False)
-        .size()
-        .reset_index(name="Chunks Processed")
-    )
     merged = melted.merge(
         chunk_counts,
         on=["Chunk Size", "Config", "Run Id", "rank"],
@@ -179,27 +182,31 @@ def _sanitize(text: str) -> str:
 def main() -> None:
     ensure_style()
     out_dir = ensure_output_dir(PLOTS_DIR / "2_load_balancing")
-    runs = load_suite_runs(SUITE)
-    runs["Config"] = [
-        config_label(s, c) for s, c in zip(runs["Schedule"], runs["Communication"])
-    ]
-    reps = select_representative_runs(runs)
-    runs = runs[runs["Run Id"].isin(reps)].copy()
+    runs_idx = ensure_config_level(load_suite_runs(SUITE, as_index=True))
+    reps = select_representative_runs(runs_idx)
+    run_mask = runs_idx.index.get_level_values("Run Id").isin(reps)
+    runs = runs_idx[run_mask].reset_index()
 
-    ranks = load_suite_ranks(SUITE)
-    ranks = ranks[ranks["Run Id"].isin(reps)].copy()
-    ranks["Config"] = [
-        config_label(s, c) for s, c in zip(ranks["Schedule"], ranks["Communication"])
-    ]
+    ranks_idx = ensure_config_level(load_suite_ranks(SUITE, as_index=True))
+    rank_mask = ranks_idx.index.get_level_values("Run Id").isin(reps)
+    ranks = ranks_idx[rank_mask].reset_index()
 
-    chunks = load_suite_chunks(SUITE)
-    chunks = chunks[chunks["Run Id"].isin(reps)].copy()
-    chunks["Config"] = [
-        config_label(s, c) for s, c in zip(chunks["Schedule"], chunks["Communication"])
-    ]
+    chunks_idx = ensure_config_level(load_suite_chunks(SUITE, as_index=True))
+    chunk_mask = chunks_idx.index.get_level_values("Run Id").isin(reps)
+    filtered_chunks_idx = chunks_idx[chunk_mask]
+    chunk_counts = (
+        filtered_chunks_idx.groupby(
+            level=["Chunk Size", "Config", "Run Id", "rank"],
+            observed=False,
+        )
+        .size()
+        .rename("Chunks Processed")
+        .reset_index()
+    )
+    chunks = filtered_chunks_idx.reset_index()
 
     plot_runtime_vs_chunk_size(runs, out_dir)
-    plot_rank_bars(ranks, chunks, out_dir)
+    plot_rank_bars(ranks, chunk_counts, out_dir)
     plot_heatmaps(chunks, out_dir)
 
 

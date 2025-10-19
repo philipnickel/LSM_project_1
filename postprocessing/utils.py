@@ -57,7 +57,7 @@ def config_palette(configs: Iterable[str]) -> dict[str, str]:
 
 def _load_index(path: Path, levels: list[str]) -> pd.DataFrame:
     if not path.exists():
-        raise FileNotFoundError(f"{path} not found. Run postprocessing_v3/data_loading.py first.")
+        raise FileNotFoundError(f"{path} not found. Run postprocessing/data_loading.py first.")
     df = pd.read_parquet(path)
     if not isinstance(df.index, pd.MultiIndex):
         raise ValueError(f"{path.name} must be a MultiIndex table")
@@ -66,7 +66,14 @@ def _load_index(path: Path, levels: list[str]) -> pd.DataFrame:
     return df
 
 
-def load_suite_runs(suite: str) -> pd.DataFrame:
+def _slice_suite(df: pd.DataFrame, suite: str) -> pd.DataFrame:
+    try:
+        return df.xs(suite, level="Suite")
+    except KeyError as exc:
+        raise ValueError(f"Suite '{suite}' not present in indexed data") from exc
+
+
+def load_suite_runs(suite: str, *, as_index: bool = False) -> pd.DataFrame:
     levels = [
         "Schedule",
         "Communication",
@@ -78,14 +85,11 @@ def load_suite_runs(suite: str) -> pd.DataFrame:
         "Suite",
     ]
     runs_idx = _load_index(RUNS_IDX, levels)
-    try:
-        subset = runs_idx.xs(suite, level="Suite").reset_index()
-    except KeyError as exc:
-        raise ValueError(f"Suite '{suite}' not present in indexed runs") from exc
-    return subset
+    subset = _slice_suite(runs_idx, suite)
+    return subset if as_index else subset.reset_index()
 
 
-def load_suite_ranks(suite: str) -> pd.DataFrame:
+def load_suite_ranks(suite: str, *, as_index: bool = False) -> pd.DataFrame:
     levels = [
         "Schedule",
         "Communication",
@@ -98,14 +102,11 @@ def load_suite_ranks(suite: str) -> pd.DataFrame:
         "rank",
     ]
     ranks_idx = _load_index(RANKS_IDX, levels)
-    try:
-        subset = ranks_idx.xs(suite, level="Suite").reset_index()
-    except KeyError as exc:
-        raise ValueError(f"Suite '{suite}' not present in indexed ranks") from exc
-    return subset
+    subset = _slice_suite(ranks_idx, suite)
+    return subset if as_index else subset.reset_index()
 
 
-def load_suite_chunks(suite: str) -> pd.DataFrame:
+def load_suite_chunks(suite: str, *, as_index: bool = False) -> pd.DataFrame:
     levels = [
         "Schedule",
         "Communication",
@@ -119,8 +120,45 @@ def load_suite_chunks(suite: str) -> pd.DataFrame:
         "chunk_id",
     ]
     chunks_idx = _load_index(CHUNKS_IDX, levels)
-    try:
-        subset = chunks_idx.xs(suite, level="Suite").reset_index()
-    except KeyError as exc:
-        raise ValueError(f"Suite '{suite}' not present in indexed chunks") from exc
-    return subset
+    subset = _slice_suite(chunks_idx, suite)
+    return subset if as_index else subset.reset_index()
+
+
+def ensure_config_column(df: pd.DataFrame) -> pd.DataFrame:
+    """Attach a human readable Config column based on schedule/communication."""
+    if "Config" in df.columns:
+        return df
+    if isinstance(df.index, pd.MultiIndex) and {"Schedule", "Communication"}.issubset(
+        set(df.index.names or [])
+    ):
+        schedules = df.index.get_level_values("Schedule")
+        communications = df.index.get_level_values("Communication")
+    else:
+        schedules = df["Schedule"]
+        communications = df["Communication"]
+    labels = [config_label(s, c) for s, c in zip(schedules, communications)]
+    result = df.copy()
+    result["Config"] = labels
+    return result
+
+
+def ensure_config_level(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure the MultiIndex dataframe includes a Config level for grouping."""
+    if not isinstance(df.index, pd.MultiIndex):
+        raise TypeError("ensure_config_level expects a MultiIndex dataframe")
+    if "Config" in (df.index.names or []):
+        return df
+    schedules = df.index.get_level_values("Schedule")
+    communications = df.index.get_level_values("Communication")
+    labels = [config_label(s, c) for s, c in zip(schedules, communications)]
+    augmented = df.copy()
+    augmented["Config"] = labels
+    augmented = augmented.set_index("Config", append=True)
+    names = [name for name in augmented.index.names if name is not None]
+    names_without = [name for name in names if name != "Config"]
+    if "Communication" not in names_without:
+        raise ValueError("MultiIndex is missing expected 'Communication' level")
+    insert_pos = names_without.index("Communication") + 1
+    reordered = names_without[:insert_pos] + ["Config"] + names_without[insert_pos:]
+    augmented = augmented.reorder_levels(reordered)
+    return augmented.sort_index()
