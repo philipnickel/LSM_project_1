@@ -20,7 +20,7 @@ from postprocessing.utils import (
     load_suite_runs,
 )
 
-SUITE = "scaling_proc"
+SUITE = "scaling_mult_host"
 
 
 def prepare_data() -> pd.DataFrame:
@@ -73,7 +73,7 @@ def plot_wall_time(totals: pd.DataFrame, out_dir: Path) -> None:
     ax.set_ylabel("Wall time [s]")
     ax.set_title("Wall Time vs Rank Count")
     fig.tight_layout()
-    fig.savefig(out_dir / "5.1_wall_time_vs_ranks.pdf", bbox_inches="tight")
+    fig.savefig(out_dir / "5.1_wall_time_vs_ranks_mult_host.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
