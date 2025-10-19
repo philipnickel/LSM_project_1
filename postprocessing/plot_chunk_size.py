@@ -27,7 +27,7 @@ from postprocessing.utils import (
     config_palette,
 )
 
-SUITE = "chunks"
+SUITE = "load_balancing"
 
 def plot_heatmaps(chunk_times: pd.Series, out_dir: Path) -> None:
     if chunk_times.empty:

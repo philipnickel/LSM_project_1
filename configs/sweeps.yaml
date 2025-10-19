@@ -94,18 +94,18 @@ experiments:
       queue: hpcintro
       n_cores: 16
       walltime: "00:30"
-      mem_per_core: "3GB"
+      mem_per_core: "5GB"
       span: "hosts=1"
     sweep:
       n_ranks: [16]
-      chunk_size: [30]
+      chunk_size: [50]
       image_shape:
-        - {width: 250, height: 250}
-        - {width: 500, height: 500}
         - {width: 1000, height: 1000}
         - {width: 5000, height: 5000}
         - {width: 10000, height: 10000}
         - {width: 20000, height: 20000}
+        - {width: 30000, height: 30000}
+        - {width: 40000, height: 40000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:

@@ -4,7 +4,7 @@
 #BSUB -n 16
 #BSUB -W 00:30
 #BSUB -R "span[hosts=1]"
-#BSUB -R "rusage[mem=3GB]"
+#BSUB -R "rusage[mem=5GB]"
 #BSUB -o logs/scaling_im_%J_%I.out
 #BSUB -e logs/scaling_im_%J_%I.err
 
