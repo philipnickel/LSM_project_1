@@ -1,10 +1,10 @@
 #!/bin/bash
-#BSUB -J scaling_proc[1-32]
+#BSUB -J scaling_proc[1-56]
 #BSUB -q hpcintro
 #BSUB -n 16
-#BSUB -W 00:15
+#BSUB -W 00:10
 #BSUB -R "span[hosts=1]"
-#BSUB -R "rusage[mem=3GB]"
+#BSUB -R "rusage[mem=2GB]"
 #BSUB -o logs/scaling_proc_%J_%I.out
 #BSUB -e logs/scaling_proc_%J_%I.err
 

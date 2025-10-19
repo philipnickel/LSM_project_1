@@ -1,8 +1,8 @@
 #!/bin/bash
-#BSUB -J scaling_im[1-20]
+#BSUB -J scaling_im[1-24]
 #BSUB -q hpcintro
 #BSUB -n 16
-#BSUB -W 00:20
+#BSUB -W 00:30
 #BSUB -R "span[hosts=1]"
 #BSUB -R "rusage[mem=3GB]"
 #BSUB -o logs/scaling_im_%J_%I.out
