@@ -1,5 +1,5 @@
 #!/bin/bash
-#BSUB -J scaling_mult_host[1-6]
+#BSUB -J scaling_mult_host[1-3]
 #BSUB -q hpcintro
 #BSUB -n 60
 #BSUB -W 00:15
