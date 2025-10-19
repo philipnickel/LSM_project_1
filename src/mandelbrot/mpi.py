@@ -167,11 +167,14 @@ def run_mpi_computation(config: RunConfig) -> Tuple[np.ndarray | None, Dict, Lis
     else:
         image, rank_times, chunk_records = _run_dynamic(comm, config, rank, size)
 
+
+    # Excluding time spend gathering timings
+    total_time = MPI.Wtime() - start_time
+
+
     # Gather timing stats and per-chunk records to rank 0
     all_times = comm.gather(rank_times, root=0)
     all_chunks = comm.gather(chunk_records, root=0)
-
-    total_time = MPI.Wtime() - start_time
 
     timing_stats: Dict[str, float] = {}
     chunk_records: List[Dict[str, Any]] = []
