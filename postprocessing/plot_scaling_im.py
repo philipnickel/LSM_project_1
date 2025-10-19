@@ -9,7 +9,8 @@ import pandas as pd
 import scienceplots  # noqa: F401
 import seaborn as sns
 
-plt.style.use(["science", "grid"])
+plt.style.use("science")
+sns.set_style("whitegrid")
 sns.set_palette("colorblind")
 sns.set_context("talk")
 
@@ -70,13 +71,16 @@ else:
         how="left",
     )
 
+# Sort for readability
+totals = totals.sort_values("image_pixels")
+
 plots_dir = Path("Plots") / SUITE
 plots_dir.mkdir(parents=True, exist_ok=True)
 
 # Log-log wall-time scaling --------------------------------------------------
 wall_df = totals.dropna(subset=["image_pixels"]).sort_values("image_pixels")
 
-fig, ax = plt.subplots(figsize=(8, 5))
+fig, ax = plt.subplots(figsize=(12, 8))
 for config, config_df in wall_df.groupby("config"):
     ax.plot(
         config_df["image_pixels"],
@@ -109,7 +113,7 @@ print(f"[plots] saved {out_wall}")
 bar_df = totals[["config", "image_size", "run_id", "comp_total", "comm_total"]].copy()
 bar_df["label"] = bar_df.apply(lambda r: f"{r['image_size']}\n{r['config']}", axis=1)
 
-fig, ax = plt.subplots(figsize=(10, 5))
+fig, ax = plt.subplots(figsize=(12, 8))
 positions = np.arange(len(bar_df))
 width = 0.6
 ax.bar(positions, bar_df["comp_total"], width=width, label="Compute")

@@ -9,7 +9,8 @@ import pandas as pd
 import scienceplots  # noqa: F401
 import seaborn as sns
 
-plt.style.use(["science", "grid"])
+plt.style.use("science")
+sns.set_style("whitegrid")
 sns.set_palette("colorblind")
 sns.set_context("talk")
 
@@ -80,7 +81,7 @@ for domain in domains:
     colors = sns.color_palette("colorblind", len(rank_subset["config"].unique()))
     config_colors = dict(zip(sorted(rank_subset["config"].unique()), colors))
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(12, 8))
     for idx, (run_id, config) in enumerate(unique_series.itertuples(index=False, name=None)):
         data = rank_subset[(rank_subset["run_id"] == run_id) & (rank_subset["config"] == config)]
         comp = data.set_index("rank")["comp_time"].reindex(ranks_order, fill_value=0.0)
@@ -120,7 +121,7 @@ for domain in domains:
     if chunk_subset.empty:
         continue
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(12, 8))
     scatter = sns.scatterplot(
         data=chunk_subset,
         x="chunk_id",

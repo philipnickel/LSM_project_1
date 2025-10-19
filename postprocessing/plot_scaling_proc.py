@@ -8,7 +8,8 @@ import pandas as pd
 import scienceplots  # noqa: F401
 import seaborn as sns
 
-plt.style.use(["science", "grid"])
+plt.style.use("science")
+sns.set_style("whitegrid")
 sns.set_palette("colorblind")
 sns.set_context("talk")
 
@@ -63,7 +64,7 @@ plots_dir.mkdir(parents=True, exist_ok=True)
 # Wall time vs ranks ---------------------------------------------------------
 wall_df = totals.dropna(subset=["n_ranks"]).sort_values(["image_size", "n_ranks"])
 
-fig, ax = plt.subplots(figsize=(9, 5))
+fig, ax = plt.subplots(figsize=(12, 8))
 sns.lineplot(
     data=wall_df,
     x="n_ranks",
@@ -89,7 +90,7 @@ ratio_df = totals.copy()
 ratio_df["comm_ratio"] = ratio_df["comm_total"] / ratio_df["comp_total"].clip(lower=1e-12)
 ratio_df = ratio_df.dropna(subset=["n_ranks"]).sort_values(["image_size", "n_ranks"])
 
-fig, ax = plt.subplots(figsize=(9, 5))
+fig, ax = plt.subplots(figsize=(12, 8))
 sns.lineplot(
     data=ratio_df,
     x="n_ranks",
