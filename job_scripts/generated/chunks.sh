@@ -1,8 +1,8 @@
 #!/bin/bash
-#BSUB -J chunks[1-20]
+#BSUB -J chunks[1-44]
 #BSUB -q hpcintro
-#BSUB -n 8
-#BSUB -W 00:10
+#BSUB -n 16
+#BSUB -W 00:05
 #BSUB -R "span[hosts=1]"
 #BSUB -R "rusage[mem=2GB]"
 #BSUB -o logs/chunks_%J_%I.out
