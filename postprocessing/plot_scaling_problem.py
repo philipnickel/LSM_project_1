@@ -41,7 +41,6 @@ def plot_wall_time(runs: pd.DataFrame, out_dir: Path) -> None:
         x="Pixels",
         y="Wall Time(s)",
         hue="Config",
-        style="Config",
         markers=True,
         dashes=False,
         ax=ax,

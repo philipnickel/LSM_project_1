@@ -52,8 +52,8 @@ def plot_wall_time(totals: pd.DataFrame, out_dir: Path) -> None:
         x="N Ranks",
         y="Wall Time(s)",
         hue="Config",
-        style="Image Size",
         markers=True,
+        dashes = False
         estimator=None,
         ax=ax,
         palette=palette,
