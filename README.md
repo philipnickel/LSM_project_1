@@ -1,3 +1,8 @@
+# NOTE: 
+
+The results downloaded from MLflow which were used for plotting can be found in 
+
+
 # Mandelbrot MPI
 
 High-level workflow for the Mandelbrot MPI experiments with MLflow tracking.
@@ -22,4 +27,5 @@ token: (find on Databricks under settings->developer->Access Token and generate 
 - **Generate HPC job script**: `uv run python job_scripts/generate_jobscript.py --suite TESTS`, inspect `job_scripts/generated/TESTS.sh`, submit with `bsub < job_scripts/generated/TESTS.sh`.
 
 - Or just use the existing ones (only need to rerun if changing resources in configs)
+
 
