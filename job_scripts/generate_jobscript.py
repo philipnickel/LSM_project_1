@@ -35,7 +35,9 @@ env.update(
         "N_CORES": str(res.get("n_cores", 4)),
         "WALLTIME": res.get("walltime", "00:30"),
         "MEM_PER_CORE": res.get("mem_per_core", "2GB"),
-        "SPAN_DIRECTIVE": f'#BSUB -R "span[{span_value}]"' if span_value else '#BSUB -R "span[ptile=10]"',
+        "SPAN_DIRECTIVE": f'#BSUB -R "span[{span_value}]"'
+        if span_value
+        else '#BSUB -R "span[ptile=10]"',
         "SUITE": args.suite,
     }
 )

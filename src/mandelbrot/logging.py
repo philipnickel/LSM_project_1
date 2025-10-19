@@ -110,7 +110,6 @@ def _records_to_table(chunk_records: Sequence[Dict[str, Any]]) -> Dict[str, List
     return frame.to_dict(orient="list")
 
 
-
 def _resolve_tracking_uri() -> str:
     """Resolve tracking URI."""
     return os.environ.get("MLFLOW_TRACKING_URI") or DEFAULT_TRACKING_URI

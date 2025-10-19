@@ -63,8 +63,7 @@ def mk_domain(df: pd.DataFrame) -> pd.DataFrame:
     df["ylim"] = df["ylim"].map(lambda v: _parse_bounds(v, (-1.3, 1.3)))
     df["Domain"] = df.apply(
         lambda r: (
-            f"[{r['xlim'][0]:.2f},{r['xlim'][1]:.2f}]×"
-            f"[{r['ylim'][0]:.2f},{r['ylim'][1]:.2f}]"
+            f"[{r['xlim'][0]:.2f},{r['xlim'][1]:.2f}]×[{r['ylim'][0]:.2f},{r['ylim'][1]:.2f}]"
         ),
         axis=1,
     )
@@ -237,11 +236,11 @@ ranks_idx = build_index(
     ],
 )
 
-#runs_df.to_parquet(os.path.join(OUT_DIR, "runs_df.parquet"), index=False)
+# runs_df.to_parquet(os.path.join(OUT_DIR, "runs_df.parquet"), index=False)
 runs_idx.to_parquet(os.path.join(OUT_DIR, "runs_indexed.parquet"))
-#chunks_df.to_parquet(os.path.join(OUT_DIR, "chunks_df.parquet"), index=False)
+# chunks_df.to_parquet(os.path.join(OUT_DIR, "chunks_df.parquet"), index=False)
 chunks_idx.to_parquet(os.path.join(OUT_DIR, "chunks_indexed.parquet"))
-#ranks_df.to_parquet(os.path.join(OUT_DIR, "ranks_df.parquet"), index=False)
+# ranks_df.to_parquet(os.path.join(OUT_DIR, "ranks_df.parquet"), index=False)
 ranks_idx.to_parquet(os.path.join(OUT_DIR, "ranks_indexed.parquet"))
 
 print(f"[info] Saved all parquet files to {OUT_DIR}")

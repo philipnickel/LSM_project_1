@@ -31,7 +31,7 @@ CHUNKS_IDX = CACHE_DIR / "chunks_indexed.parquet"
 def ensure_style() -> None:
     sns.set_style("whitegrid")
     plt.style.use("science")
-    #sns.set_context("talk")
+    # sns.set_context("talk")
 
 
 def ensure_output_dir(path: Path) -> Path:

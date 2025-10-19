@@ -29,6 +29,7 @@ from postprocessing.utils import (
 
 SUITE = "load_balancing"
 
+
 def plot_heatmaps(chunk_times: pd.Series, out_dir: Path) -> None:
     if chunk_times.empty:
         return
@@ -56,6 +57,7 @@ def plot_heatmaps(chunk_times: pd.Series, out_dir: Path) -> None:
     fig.tight_layout()
     fig.savefig(out_dir / "2.4_chunk_size_vs_chunk_id_heatmap.pdf", bbox_inches="tight")
     plt.close(fig)
+
 
 def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
     if ranks.empty:
@@ -134,9 +136,7 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
 
             config_data = domain_pivot.xs(config, level="Config")
             ranks_in_config = sorted(config_data.index.get_level_values("Rank").unique().tolist())
-            chunk_sizes = sorted(
-                config_data.index.get_level_values("Chunk Size").unique().tolist()
-            )
+            chunk_sizes = sorted(config_data.index.get_level_values("Chunk Size").unique().tolist())
             if not ranks_in_config or not chunk_sizes:
                 ax.set_visible(False)
                 continue
@@ -147,12 +147,15 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
             ymax = 0.0
 
             for idx, chunk_size in enumerate(chunk_sizes):
-                chunk_slice = (
-                    config_data.xs(chunk_size, level="Chunk Size")
-                    .reindex(ranks_in_config, fill_value=0.0)
+                chunk_slice = config_data.xs(chunk_size, level="Chunk Size").reindex(
+                    ranks_in_config, fill_value=0.0
                 )
-                compute_vals = chunk_slice.get("Compute", pd.Series(0.0, index=ranks_in_config)).to_numpy()
-                comm_vals = chunk_slice.get("Communication", pd.Series(0.0, index=ranks_in_config)).to_numpy()
+                compute_vals = chunk_slice.get(
+                    "Compute", pd.Series(0.0, index=ranks_in_config)
+                ).to_numpy()
+                comm_vals = chunk_slice.get(
+                    "Communication", pd.Series(0.0, index=ranks_in_config)
+                ).to_numpy()
 
                 positions = x + (idx - (len(chunk_sizes) - 1) / 2) * bar_width
 
@@ -222,8 +225,6 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
         if domain_idx == 0:
             fig.savefig(out_dir / "2.0Ranks.pdf", bbox_inches="tight")
         plt.close(fig)
-
-
 
 
 def main() -> None:

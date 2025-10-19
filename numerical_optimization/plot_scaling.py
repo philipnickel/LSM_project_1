@@ -32,7 +32,11 @@ def load_data(csv_path: Path) -> pd.DataFrame:
     df["Problem Size (Pixels)"] = (
         df["Image Size"]
         .str.split("x")
-        .apply(lambda dims: int(dims[0]) * int(dims[1]) if isinstance(dims, list) and len(dims) == 2 else np.nan)
+        .apply(
+            lambda dims: int(dims[0]) * int(dims[1])
+            if isinstance(dims, list) and len(dims) == 2
+            else np.nan
+        )
     )
     df = df.dropna(subset=["Problem Size (Pixels)"])
     df = df.sort_values("Problem Size (Pixels)")

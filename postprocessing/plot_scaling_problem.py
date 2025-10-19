@@ -25,8 +25,11 @@ SUITE = "scaling_im"
 def prepare_runs() -> pd.DataFrame:
     runs_idx = ensure_config_level(load_suite_runs(SUITE, as_index=True))
     runs = runs_idx.reset_index()
-    runs["Pixels"] = runs["Image Size"].str.lower().str.split("x").apply(
-        lambda parts: int(parts[0]) * int(parts[1])
+    runs["Pixels"] = (
+        runs["Image Size"]
+        .str.lower()
+        .str.split("x")
+        .apply(lambda parts: int(parts[0]) * int(parts[1]))
     )
     runs = runs.sort_values(["Pixels", "Config"])
     runs["Time per Pixel"] = runs["Wall Time(s)"] / runs["Pixels"]
@@ -45,7 +48,6 @@ def plot_wall_time(runs: pd.DataFrame, out_dir: Path) -> None:
         dashes=False,
         ax=ax,
         palette=palette,
-        
     )
     ax.set_xscale("log")
     ax.set_yscale("log")

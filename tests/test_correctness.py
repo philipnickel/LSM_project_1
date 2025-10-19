@@ -43,4 +43,3 @@ def test_mpi_matches_baseline(config):
         np.testing.assert_allclose(
             mpi_image, baseline, rtol=1e-10, err_msg=f"Mismatch: {config.run_name}"
         )
-
