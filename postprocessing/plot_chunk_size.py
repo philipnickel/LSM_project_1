@@ -12,7 +12,6 @@ if __package__ is None or __package__ == "":
 
 from postprocessing.utils import (
     PLOTS_DIR,
-    config_palette,
     ensure_output_dir,
     ensure_style,
     ensure_config_level,
@@ -24,144 +23,135 @@ from postprocessing.utils import (
 SUITE = "chunks"
 
 
-def select_representative_runs(runs_idx: pd.DataFrame) -> set[str]:
-    series = (
-        runs_idx["Wall Time(s)"]
-        .groupby(level=["Chunk Size", "Config", "Run Id"], observed=False)
-        .mean()
-    )
-
-    def _pick_median(group: pd.Series) -> str | None:
-        if group.empty:
-            return None
-        ordered = group.sort_values()
-        return ordered.index[len(ordered) // 2][-1]
-
-    reps = series.groupby(level=["Chunk Size", "Config"], observed=False).apply(_pick_median)
-    return {rep for rep in reps.dropna().astype(str)}
-
-
-def plot_runtime_vs_chunk_size(runs: pd.DataFrame, out_dir: Path) -> None:
-    palette = config_palette(runs["Config"].unique())
-    g = sns.relplot(
-        data=runs,
-        x="Chunk Size",
-        y="Wall Time(s)",
-        hue="Config",
-        style="Domain",
-        col="Chunk Size",
-        kind="line",
-        estimator=None,
-        markers=True,
-        palette=palette,
-        height=4,
-        aspect=1.2,
-        col_wrap=3,
-    )
-    g.set_axis_labels("Chunk size", "Wall time [s]")
-    for ax in g.axes.flatten():
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-    g.fig.suptitle("Runtime vs Chunk Size", y=1.02)
-    g.fig.savefig(out_dir / "2.1_runtime_vs_chunk_size.pdf", bbox_inches="tight")
-    plt.close(g.fig)
-
-
-def prep_rank_totals(ranks: pd.DataFrame) -> pd.DataFrame:
-    ranks = ranks.copy()
-    ranks["Metric"] = "Comp Total"
-    comp = ranks[["Chunk Size", "Config", "Run Id", "rank", "Metric", "comp_time"]]
-    comp = comp.rename(columns={"comp_time": "Time"})
-
-    comm_total = ranks.get("Comm Total")
-    if comm_total is None:
-        comm_total = (
-            ranks.get("comm_send_time", 0.0).fillna(0.0)
-            + ranks.get("comm_recv_time", 0.0).fillna(0.0)
-        )
-    comm_df = ranks[["Chunk Size", "Config", "Run Id", "rank"]].copy()
-    comm_df["Metric"] = "Comm Total"
-    comm_df["Time"] = comm_total
-
-    return pd.concat([comp, comm_df], ignore_index=True)
-
-
 def plot_rank_bars(
-    ranks: pd.DataFrame,
-    chunk_counts: pd.DataFrame,
+    ranks_idx: pd.DataFrame,
+    chunk_counts: pd.Series,
     out_dir: Path,
 ) -> None:
-    melted = prep_rank_totals(ranks)
-    merged = melted.merge(
-        chunk_counts,
-        on=["Chunk Size", "Config", "Run Id", "rank"],
-        how="left",
-    )
+    sum_cols = [
+        col
+        for col in ("comp_time", "comm_time", "comm_send_time", "comm_recv_time")
+        if col in ranks_idx.columns
+    ]
+    if "comp_time" not in sum_cols:
+        raise ValueError("Rank data must include 'comp_time' column")
 
-    g = sns.catplot(
-        data=merged,
-        kind="bar",
-        x="rank",
-        y="Time",
-        hue="Metric",
-        col="Chunk Size",
-        row="Config",
-        estimator=sum,
-        palette="pastel",
-        sharey=False,
-        height=4,
-        aspect=1.2,
-    )
-    g.set_axis_labels("Rank", "Time [s]")
-    g.fig.suptitle("Computation vs Communication per Rank", y=1.02)
+    aggregated = ranks_idx[sum_cols].groupby(level=["Domain", "Chunk Size", "rank"]).sum()
+    if aggregated.empty:
+        return
 
-    grouped = list(merged.groupby(["Chunk Size", "Config"]))
-    for ax, ((chunk_size, config), data) in zip(g.axes.flatten(), grouped):
-        counts = (
-            data.drop_duplicates(subset=["rank", "Run Id"])
-            .groupby("rank", observed=False)["Chunks Processed"]
-            .sum()
+    comp_total = aggregated["comp_time"].fillna(0.0)
+    if "comm_time" in aggregated.columns:
+        comm_total = aggregated["comm_time"].fillna(0.0)
+    else:
+        comm_total = (
+            aggregated.get("comm_send_time", 0.0).fillna(0.0)
+            + aggregated.get("comm_recv_time", 0.0).fillna(0.0)
         )
-        for patch in ax.patches:
-            rank_val = int(patch.get_x() + patch.get_width() / 2)
-            count = counts.get(rank_val)
-            if pd.notna(count):
+
+    domains = aggregated.index.get_level_values("Domain").unique().tolist()
+    chunk_sizes = sorted(aggregated.index.get_level_values("Chunk Size").unique())
+    palette = sns.color_palette("viridis", len(chunk_sizes)) if chunk_sizes else sns.color_palette("viridis", 1)
+
+    for domain in domains:
+        comp_matrix = (
+            comp_total.xs(domain, level="Domain")
+            .unstack("Chunk Size")
+            .reindex(columns=chunk_sizes)
+            .fillna(0.0)
+        )
+        comm_matrix = (
+            comm_total.xs(domain, level="Domain")
+            .unstack("Chunk Size")
+            .reindex(columns=chunk_sizes)
+            .fillna(0.0)
+        )
+        ranks = comp_matrix.index.tolist()
+        if not ranks:
+            continue
+
+        counts_matrix = (
+            chunk_counts.xs(domain, level="Domain")
+            .unstack("Chunk Size")
+            .reindex(index=ranks, columns=chunk_sizes)
+            .fillna(0)
+        )
+
+        width = 0.8 / max(len(chunk_sizes), 1)
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        for idx, chunk_size in enumerate(chunk_sizes):
+            offsets = (idx - (len(chunk_sizes) - 1) / 2) * width
+            positions = [r + offsets for r in ranks]
+            comp_vals = comp_matrix[chunk_size].reindex(ranks).values
+            comm_vals = comm_matrix[chunk_size].reindex(ranks).values
+            totals = comp_vals + comm_vals
+            counts = counts_matrix[chunk_size].reindex(ranks).values
+
+            ax.bar(
+                positions,
+                comp_vals,
+                width=width,
+                color=palette[idx],
+                alpha=0.85,
+            )
+            ax.bar(
+                positions,
+                comm_vals,
+                width=width,
+                bottom=comp_vals,
+                color=palette[idx],
+                alpha=0.35,
+            )
+
+            for x, total, count in zip(positions, totals, counts):
+                if total <= 0:
+                    continue
                 ax.text(
-                    patch.get_x() + patch.get_width() / 2,
-                    patch.get_height(),
-                    f"{int(count)}",
+                    x,
+                    total,
+                    f"{total:.2f}\n({int(count)} chunks)",
                     ha="center",
                     va="bottom",
                     fontsize=7,
                 )
-    g.fig.subplots_adjust(top=0.88)
-    g.fig.savefig(out_dir / "2.2_rank_time_breakdown.pdf", bbox_inches="tight")
-    plt.close(g.fig)
+
+        ax.set_xticks(ranks)
+        ax.set_xlabel("Rank")
+        ax.set_ylabel("Time [s]")
+        ax.set_title(f"Domain {domain}")
+        ax.grid(axis="y", alpha=0.3)
+
+        legend_handles = [
+            plt.Rectangle((0, 0), 1, 1, color=palette[idx], label=f"Chunk {int(cs)}")
+            for idx, cs in enumerate(chunk_sizes)
+        ]
+        if legend_handles:
+            ax.legend(handles=legend_handles, title="Chunk size")
+
+        fig.tight_layout()
+        fname = f"2.2_rank_time_breakdown_domain_{_sanitize(str(domain))}.pdf"
+        fig.savefig(out_dir / fname, bbox_inches="tight")
+        plt.close(fig)
 
 
-def plot_heatmaps(chunks: pd.DataFrame, out_dir: Path) -> None:
-    aggregated = (
-        chunks.groupby(
-            ["Chunk Size", "chunk_id"],
-            observed=False,
-        )["comp_time"]
-        .mean()
-        .reset_index()
-    )
-
-    pivot = aggregated.pivot_table(
-        index="Chunk Size",
-        columns="chunk_id",
-        values="comp_time",
-        aggfunc="mean",
-    ).sort_index()
-
-    if pivot.empty:
+def plot_heatmaps(chunk_times: pd.Series, out_dir: Path) -> None:
+    if chunk_times.empty:
         return
+
+    means = (
+        chunk_times.groupby(
+            level=["Chunk Size", "chunk_id"],
+            observed=False,
+        )
+        .mean()
+        .unstack("chunk_id")
+        .sort_index()
+    )
 
     fig, ax = plt.subplots(figsize=(12, 6))
     sns.heatmap(
-        pivot,
+        means,
         cmap="mako",
         ax=ax,
         cbar_kws={"label": "Mean chunk compute time [s]"},
@@ -184,32 +174,15 @@ def _sanitize(text: str) -> str:
 def main() -> None:
     ensure_style()
     out_dir = ensure_output_dir(PLOTS_DIR / "2_load_balancing")
-    runs_idx = ensure_config_level(load_suite_runs(SUITE, as_index=True))
-    reps = select_representative_runs(runs_idx)
-    run_mask = runs_idx.index.get_level_values("Run Id").isin(reps)
-    runs = runs_idx[run_mask].reset_index()
-
     ranks_idx = ensure_config_level(load_suite_ranks(SUITE, as_index=True))
-    rank_mask = ranks_idx.index.get_level_values("Run Id").isin(reps)
-    ranks = ranks_idx[rank_mask].reset_index()
+    chunk_counts = ranks_idx.groupby(level=["Domain", "Chunk Size", "rank"], observed=False)[
+        "chunks"
+    ].sum()
 
     chunks_idx = ensure_config_level(load_suite_chunks(SUITE, as_index=True))
-    chunk_mask = chunks_idx.index.get_level_values("Run Id").isin(reps)
-    filtered_chunks_idx = chunks_idx[chunk_mask]
-    chunk_counts = (
-        filtered_chunks_idx.groupby(
-            level=["Chunk Size", "Config", "Run Id", "rank"],
-            observed=False,
-        )
-        .size()
-        .rename("Chunks Processed")
-        .reset_index()
-    )
-    chunks = filtered_chunks_idx.reset_index()
 
-    plot_runtime_vs_chunk_size(runs, out_dir)
-    plot_rank_bars(ranks, chunk_counts, out_dir)
-    plot_heatmaps(chunks, out_dir)
+    plot_rank_bars(ranks_idx, chunk_counts, out_dir)
+    plot_heatmaps(chunks_idx["comp_time"], out_dir)
 
 
 if __name__ == "__main__":
