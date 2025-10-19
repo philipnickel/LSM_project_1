@@ -29,7 +29,7 @@ def prepare_runs() -> pd.DataFrame:
         lambda parts: int(parts[0]) * int(parts[1])
     )
     runs = runs.sort_values(["Pixels", "Config"])
-    runs["Throughput"] = runs["Pixels"] / runs["Wall Time(s)"]
+    runs["Time per Pixel"] = runs["Wall Time(s)"] / runs["Pixels"]
     return runs
 
 
@@ -41,8 +41,9 @@ def plot_wall_time(runs: pd.DataFrame, out_dir: Path) -> None:
         x="Pixels",
         y="Wall Time(s)",
         hue="Config",
-        style="Image Size",
+        style="Config",
         markers=True,
+        dashes=False,
         ax=ax,
         palette=palette,
     )
@@ -56,13 +57,13 @@ def plot_wall_time(runs: pd.DataFrame, out_dir: Path) -> None:
     plt.close(fig)
 
 
-def plot_throughput(runs: pd.DataFrame, out_dir: Path) -> None:
+def plot_time_per_pixel(runs: pd.DataFrame, out_dir: Path) -> None:
     palette = config_palette(runs["Config"].unique())
     fig, ax = plt.subplots(figsize=(12, 8))
     sns.lineplot(
         data=runs,
         x="Pixels",
-        y="Throughput",
+        y="Time per Pixel",
         hue="Config",
         style="Image Size",
         markers=True,
@@ -70,11 +71,12 @@ def plot_throughput(runs: pd.DataFrame, out_dir: Path) -> None:
         palette=palette,
     )
     ax.set_xscale("log")
+    ax.set_yscale("log")
     ax.set_xlabel("Pixels per image")
-    ax.set_ylabel("Pixels per second")
-    ax.set_title("Throughput vs Problem Size")
+    ax.set_ylabel("Time per pixel [s]")
+    ax.set_title("Time per Pixel vs Problem Size")
     fig.tight_layout()
-    fig.savefig(out_dir / "4.1_throughput_vs_pixels.pdf", bbox_inches="tight")
+    fig.savefig(out_dir / "4.2_time_per_pixel_vs_pixels.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
@@ -83,7 +85,7 @@ def main() -> None:
     runs = prepare_runs()
     out_dir = ensure_output_dir(PLOTS_DIR / "4_scaling_problem")
     plot_wall_time(runs, out_dir)
-    plot_throughput(runs, out_dir)
+    plot_time_per_pixel(runs, out_dir)
 
 
 if __name__ == "__main__":

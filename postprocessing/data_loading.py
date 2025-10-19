@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import mlflow
+from mlflow.exceptions import MlflowException
 import pandas as pd
 
 pd.set_option("display.float_format", lambda x: f"{x:.2e}")
@@ -40,10 +41,26 @@ def strip(df: pd.DataFrame) -> pd.DataFrame:
     return df.set_axis(cols, axis=1)
 
 
+def _parse_bounds(value: object, fallback: tuple[float, float]) -> tuple[float, float]:
+    if isinstance(value, str):
+        try:
+            value = ast.literal_eval(value)
+        except (ValueError, SyntaxError):
+            return fallback
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return fallback
+    if isinstance(value, (tuple, list)) and len(value) == 2:
+        try:
+            return float(value[0]), float(value[1])
+        except (TypeError, ValueError):
+            return fallback
+    return fallback
+
+
 def mk_domain(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["xlim"] = df["xlim"].map(lambda v: tuple(ast.literal_eval(v)) if isinstance(v, str) else v)
-    df["ylim"] = df["ylim"].map(lambda v: tuple(ast.literal_eval(v)) if isinstance(v, str) else v)
+    df["xlim"] = df["xlim"].map(lambda v: _parse_bounds(v, (-2.2, 0.75)))
+    df["ylim"] = df["ylim"].map(lambda v: _parse_bounds(v, (-1.3, 1.3)))
     df["Domain"] = df.apply(
         lambda r: (
             f"[{r['xlim'][0]:.2f},{r['xlim'][1]:.2f}]×"
@@ -56,8 +73,8 @@ def mk_domain(df: pd.DataFrame) -> pd.DataFrame:
 
 def mk_image_size(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    width = df["width"].astype(int).astype(str)
-    height = df["height"].astype(int).astype(str)
+    width = df["width"].fillna(0).astype(int).astype(str)
+    height = df["height"].fillna(0).astype(int).astype(str)
     df["Image Size"] = width + "x" + height
     return df.drop(columns=["width", "height"])
 
@@ -78,7 +95,11 @@ def load_table_for_all_runs(
         if run_id is None:
             raise KeyError("Run Id column missing from runs table")
         uri = f"runs:/{run_id}/{artifact_name}"
-        data = mlflow.artifacts.load_dict(uri)
+        try:
+            data = mlflow.artifacts.load_dict(uri)
+        except (FileNotFoundError, MlflowException):
+            print(f"[warn] Missing artifact '{artifact_name}' for run {run_id}, skipping.")
+            return pd.DataFrame()
         if isinstance(data, dict) and "columns" in data and "data" in data:
             tbl = pd.DataFrame(data["data"], columns=data["columns"])
         else:
@@ -90,7 +111,11 @@ def load_table_for_all_runs(
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
         futures = [ex.submit(_one, r) for _, r in runs_df.iterrows()]
         for fut in as_completed(futures):
-            dfs.append(fut.result())
+            result = fut.result()
+            if not result.empty:
+                dfs.append(result)
+    if not dfs:
+        raise RuntimeError(f"No data retrieved for artifact '{artifact_name}'")
     return pd.concat(dfs, ignore_index=True)
 
 

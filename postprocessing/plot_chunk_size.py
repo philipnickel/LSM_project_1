@@ -49,13 +49,14 @@ def plot_runtime_vs_chunk_size(runs: pd.DataFrame, out_dir: Path) -> None:
         y="Wall Time(s)",
         hue="Config",
         style="Domain",
-        col="Run Id",
+        col="Chunk Size",
         kind="line",
         estimator=None,
         markers=True,
         palette=palette,
         height=4,
         aspect=1.2,
+        col_wrap=3,
     )
     g.set_axis_labels("Chunk size", "Wall time [s]")
     for ax in g.axes.flatten():
@@ -138,38 +139,39 @@ def plot_rank_bars(
     plt.close(g.fig)
 
 
-def plot_heatmaps(chunks: pd.DataFrame, out_dir: Path, max_plots: int = 16) -> None:
-    plot_count = 0
-    for (chunk_size, domain, config, run_id), group in chunks.groupby(
-        ["Chunk Size", "Domain", "Config", "Run Id"], observed=False
-    ):
-        if plot_count >= max_plots:
-            break
-        pivot = group.pivot_table(
-            index="rank",
-            columns="chunk_id",
-            values="comp_time",
-            aggfunc="mean",
-        ).sort_index()
-        if pivot.empty:
-            continue
-        fig, ax = plt.subplots(figsize=(10, 6))
-        sns.heatmap(pivot, cmap="mako", ax=ax)
-        title = (
-            f"Chunk Compute Times Heatmap\nChunk Size {chunk_size}, {config}\n"
-            f"Domain {domain}, Run {str(run_id)[-4:]}"
-        )
-        ax.set_title(title)
-        ax.set_xlabel("Chunk ID")
-        ax.set_ylabel("Rank")
-        fig.tight_layout()
-        fname = (
-            f"2.4_heatmap_chunk{int(chunk_size)}_"
-            f"{_sanitize(str(domain))}_{_sanitize(config)}_{str(run_id)[-4:]}.pdf"
-        )
-        fig.savefig(out_dir / fname, bbox_inches="tight")
-        plt.close(fig)
-        plot_count += 1
+def plot_heatmaps(chunks: pd.DataFrame, out_dir: Path) -> None:
+    aggregated = (
+        chunks.groupby(
+            ["Chunk Size", "chunk_id"],
+            observed=False,
+        )["comp_time"]
+        .mean()
+        .reset_index()
+    )
+
+    pivot = aggregated.pivot_table(
+        index="Chunk Size",
+        columns="chunk_id",
+        values="comp_time",
+        aggfunc="mean",
+    ).sort_index()
+
+    if pivot.empty:
+        return
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    sns.heatmap(
+        pivot,
+        cmap="mako",
+        ax=ax,
+        cbar_kws={"label": "Mean chunk compute time [s]"},
+    )
+    ax.set_xlabel("Chunk ID")
+    ax.set_ylabel("Chunk Size")
+    ax.set_title("Chunk Compute Time vs Chunk Size")
+    fig.tight_layout()
+    fig.savefig(out_dir / "2.4_chunk_size_vs_chunk_id_heatmap.pdf", bbox_inches="tight")
+    plt.close(fig)
 
 
 def _sanitize(text: str) -> str:

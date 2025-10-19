@@ -39,4 +39,3 @@ tests/test_outputs/
 # Postprocessing outputs
 _exp_mlcache
 
-Plots/

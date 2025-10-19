@@ -6,7 +6,7 @@
 ## 2.1 Effects of chunk size 
 
 ### **2.2 Computation vs. Communication Breakdown**
-- **Goal:** Quantify the ratio of computation to communication time.
+- **Goal:** Quantify the ratio of computation to communication time. And overall time. 
 - **Type:** `sns.barplot` (grouped or stacked)
 - **Axes:** x = Rank, y = Time (s)
 - **Hue:** Metric (`Comp Total`, `Comm Total`)
