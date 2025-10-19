@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from numbers import Integral
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -36,63 +37,84 @@ def plot_rank_bars(
     if "comp_time" not in sum_cols:
         raise ValueError("Rank data must include 'comp_time' column")
 
-    aggregated = ranks_idx[sum_cols].groupby(level=["Domain", "Chunk Size", "rank"]).sum()
+    aggregated = (
+        ranks_idx[sum_cols]
+        .groupby(level=["Domain", "Chunk Size", "rank"], observed=False)
+        .sum()
+        .reset_index()
+    )
     if aggregated.empty:
         return
 
-    comp_total = aggregated["comp_time"].fillna(0.0)
+    comp_series = aggregated["comp_time"].fillna(0.0)
     if "comm_time" in aggregated.columns:
-        comm_total = aggregated["comm_time"].fillna(0.0)
+        comm_series = aggregated["comm_time"].fillna(0.0)
     else:
-        comm_total = (
-            aggregated.get("comm_send_time", 0.0).fillna(0.0)
-            + aggregated.get("comm_recv_time", 0.0).fillna(0.0)
+        send_series = (
+            aggregated["comm_send_time"].fillna(0.0)
+            if "comm_send_time" in aggregated.columns
+            else pd.Series(0.0, index=aggregated.index)
         )
+        recv_series = (
+            aggregated["comm_recv_time"].fillna(0.0)
+            if "comm_recv_time" in aggregated.columns
+            else pd.Series(0.0, index=aggregated.index)
+        )
+        comm_series = send_series + recv_series
 
-    domains = aggregated.index.get_level_values("Domain").unique().tolist()
-    chunk_sizes = sorted(aggregated.index.get_level_values("Chunk Size").unique())
-    palette = sns.color_palette("viridis", len(chunk_sizes)) if chunk_sizes else sns.color_palette("viridis", 1)
+    plot_data = aggregated[["Domain", "Chunk Size", "rank"]].copy()
+    plot_data["comp_time"] = comp_series
+    plot_data["comm_time"] = comm_series
 
-    for domain in domains:
-        comp_matrix = (
-            comp_total.xs(domain, level="Domain")
-            .unstack("Chunk Size")
-            .reindex(columns=chunk_sizes)
-            .fillna(0.0)
-        )
-        comm_matrix = (
-            comm_total.xs(domain, level="Domain")
-            .unstack("Chunk Size")
-            .reindex(columns=chunk_sizes)
-            .fillna(0.0)
-        )
-        ranks = comp_matrix.index.tolist()
+    if isinstance(chunk_counts, pd.DataFrame):
+        if chunk_counts.shape[1] != 1:
+            raise ValueError("chunk_counts must have exactly one value column")
+        chunk_counts_series = chunk_counts.iloc[:, 0]
+    else:
+        chunk_counts_series = chunk_counts
+
+    counts_df = chunk_counts_series.rename("chunks").reset_index()
+    plot_data = plot_data.merge(counts_df, on=["Domain", "Chunk Size", "rank"], how="left")
+    plot_data["chunks"] = plot_data["chunks"].fillna(0)
+
+    unique_chunk_sizes = sorted(plot_data["Chunk Size"].unique())
+    chunk_palette = sns.color_palette("viridis", max(len(unique_chunk_sizes), 1))
+    color_map = dict(zip(unique_chunk_sizes, chunk_palette))
+
+    def _chunk_label(value: object) -> str:
+        if isinstance(value, Integral):
+            return f"Chunk {int(value)}"
+        if isinstance(value, float):
+            return f"Chunk {int(value)}" if value.is_integer() else f"Chunk {value:g}"
+        return f"Chunk {value}"
+
+    for domain, domain_df in plot_data.groupby("Domain", sort=False):
+        chunk_sizes = sorted(domain_df["Chunk Size"].unique())
+        ranks = sorted(domain_df["rank"].unique())
         if not ranks:
             continue
-
-        counts_matrix = (
-            chunk_counts.xs(domain, level="Domain")
-            .unstack("Chunk Size")
-            .reindex(index=ranks, columns=chunk_sizes)
-            .fillna(0)
-        )
 
         width = 0.8 / max(len(chunk_sizes), 1)
         fig, ax = plt.subplots(figsize=(12, 6))
 
         for idx, chunk_size in enumerate(chunk_sizes):
-            offsets = (idx - (len(chunk_sizes) - 1) / 2) * width
-            positions = [r + offsets for r in ranks]
-            comp_vals = comp_matrix[chunk_size].reindex(ranks).values
-            comm_vals = comm_matrix[chunk_size].reindex(ranks).values
+            offset = (idx - (len(chunk_sizes) - 1) / 2) * width
+            positions = [rank + offset for rank in ranks]
+            chunk_df = (
+                domain_df[domain_df["Chunk Size"] == chunk_size]
+                .set_index("rank")
+                .reindex(ranks)
+            )
+            comp_vals = chunk_df["comp_time"].fillna(0.0).to_numpy()
+            comm_vals = chunk_df["comm_time"].fillna(0.0).to_numpy()
+            counts = chunk_df["chunks"].fillna(0).to_numpy()
             totals = comp_vals + comm_vals
-            counts = counts_matrix[chunk_size].reindex(ranks).values
 
             ax.bar(
                 positions,
                 comp_vals,
                 width=width,
-                color=palette[idx],
+                color=color_map.get(chunk_size),
                 alpha=0.85,
             )
             ax.bar(
@@ -100,7 +122,7 @@ def plot_rank_bars(
                 comm_vals,
                 width=width,
                 bottom=comp_vals,
-                color=palette[idx],
+                color=color_map.get(chunk_size),
                 alpha=0.35,
             )
 
@@ -123,8 +145,8 @@ def plot_rank_bars(
         ax.grid(axis="y", alpha=0.3)
 
         legend_handles = [
-            plt.Rectangle((0, 0), 1, 1, color=palette[idx], label=f"Chunk {int(cs)}")
-            for idx, cs in enumerate(chunk_sizes)
+            plt.Rectangle((0, 0), 1, 1, color=color_map.get(cs), label=_chunk_label(cs))
+            for cs in chunk_sizes
         ]
         if legend_handles:
             ax.legend(handles=legend_handles, title="Chunk size")

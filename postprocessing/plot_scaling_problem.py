@@ -57,35 +57,11 @@ def plot_wall_time(runs: pd.DataFrame, out_dir: Path) -> None:
     plt.close(fig)
 
 
-def plot_time_per_pixel(runs: pd.DataFrame, out_dir: Path) -> None:
-    palette = config_palette(runs["Config"].unique())
-    fig, ax = plt.subplots(figsize=(12, 8))
-    sns.lineplot(
-        data=runs,
-        x="Pixels",
-        y="Time per Pixel",
-        hue="Config",
-        style="Image Size",
-        markers=True,
-        ax=ax,
-        palette=palette,
-    )
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("Pixels per image")
-    ax.set_ylabel("Time per pixel [s]")
-    ax.set_title("Time per Pixel vs Problem Size")
-    fig.tight_layout()
-    fig.savefig(out_dir / "4.2_time_per_pixel_vs_pixels.pdf", bbox_inches="tight")
-    plt.close(fig)
-
-
 def main() -> None:
     ensure_style()
     runs = prepare_runs()
     out_dir = ensure_output_dir(PLOTS_DIR / "4_scaling_problem")
     plot_wall_time(runs, out_dir)
-    plot_time_per_pixel(runs, out_dir)
 
 
 if __name__ == "__main__":
