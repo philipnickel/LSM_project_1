@@ -21,7 +21,10 @@ mlflow.login(backend="databricks")
 
 runs_df = mlflow.search_runs(search_all_experiments=True).copy()
 
-# Drop tags.*
+# Preserve suite tag before dropping other tags
+if "tags.suite" in runs_df.columns:
+    runs_df["suite"] = runs_df["tags.suite"]
+# Drop remaining tags.*
 runs_df = runs_df.drop(runs_df.filter(regex=r"^tags\.").columns, axis=1)
 
 # Strip params./metrics.
@@ -76,6 +79,7 @@ keep = [
     "wall_time",
     "domain",
     "run_id",
+    "suite",
 ]
 runs_df = runs_df[[c for c in keep if c in runs_df.columns]].copy()
 runs_df.dropna(subset=["schedule"], inplace=True)
@@ -109,6 +113,7 @@ meta_cols = [
         "domain",
         "image_size",
         "run_id",
+        "suite",
     ]
     if c in runs_df.columns
 ]
@@ -185,6 +190,7 @@ if not chunks_df.empty:
             "domain",
             "image_size",
             "run_id",
+            "suite",
             "rank",
             "chunk_id",
         ]
@@ -269,11 +275,11 @@ if not ranks_df.empty:
             "domain",
             "image_size",
             "run_id",
+            "suite",
             "rank",
         ]
         if c in ranks_df.columns
     ]
-
     ranks_idx = ranks_df.set_index(rank_levels).sort_index()
     print("[info] ranks index levels:", ranks_idx.index.names)
 else:

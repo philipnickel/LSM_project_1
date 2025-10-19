@@ -69,6 +69,26 @@ experiments:
       domains:
         - [[-2.2, 0.75], [-1.3, 1.3]]
 
+
+  - name: scaling_mult_host
+    resources:
+      queue: hpcintro
+      n_cores: 100
+      walltime: "00:15"
+      mem_per_core: "3GB"
+    sweep:
+      n_ranks: [30, 50, 75, 100]
+      chunk_size: [8]
+      image_shape:
+        - {width: 5000, height: 5000}
+        - {width: 10000, height: 10000}
+      schedule: [static, dynamic]
+      communication: [blocking, nonblocking]
+      domains:
+        - [[-2.2, 0.75], [-1.3, 1.3]]
+
+
+
   - name: scaling_im
     resources:
       queue: hpcintro
