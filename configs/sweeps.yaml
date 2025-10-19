@@ -20,12 +20,12 @@ experiments:
     resources:
       queue: hpcintro
       n_cores: 8
-      walltime: "00:05"
+      walltime: "00:15"
       mem_per_core: "2GB"
       span: "hosts=1"
     sweep:
       n_ranks: [8]
-      chunk_size: [50, 100, 250, 500, 750, 1500]
+      chunk_size: [50, 100, 250, 500, 750]
       image_shape:
         - {width: 10000, height: 10000}
       schedule: [static, dynamic]
@@ -42,7 +42,7 @@ experiments:
       span: "hosts=1"
     sweep:
       n_ranks: [8]
-      chunk_size: [8]
+      chunk_size: [50, 100, 250, 500, 750]
       image_shape:
         - {width: 10000, height: 10000}
       schedule: [static, dynamic]

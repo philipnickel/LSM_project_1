@@ -46,6 +46,7 @@ def plot_wall_time(runs: pd.DataFrame, out_dir: Path) -> None:
         dashes=False,
         ax=ax,
         palette=palette,
+        
     )
     ax.set_xscale("log")
     ax.set_yscale("log")

@@ -1,5 +1,5 @@
 #!/bin/bash
-#BSUB -J load_balancing[1-8]
+#BSUB -J load_balancing[1-40]
 #BSUB -q hpcintro
 #BSUB -n 8
 #BSUB -W 00:10
