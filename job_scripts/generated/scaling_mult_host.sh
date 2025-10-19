@@ -3,7 +3,7 @@
 #BSUB -q hpcintro
 #BSUB -n 100
 #BSUB -W 00:15
-
+#BSUB -R "span[ptile=20]"
 #BSUB -R "rusage[mem=3GB]"
 #BSUB -o logs/scaling_mult_host_%J_%I.out
 #BSUB -e logs/scaling_mult_host_%J_%I.err
