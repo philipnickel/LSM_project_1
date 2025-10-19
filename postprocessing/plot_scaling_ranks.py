@@ -61,7 +61,12 @@ def prepare_data() -> pd.DataFrame:
             continue
     if not frames:
         raise RuntimeError(f"No data found for suites {SUITES}")
-    return pd.concat(frames, ignore_index=True)
+    totals = pd.concat(frames, ignore_index=True)
+    label_map = {
+        "scaling_mult_host": "Multi-host",
+        "scaling_proc": "Single-node",
+    }
+    totals["Suite"] = totals["Suite"].map(label_map).fillna(totals["Suite"])
     return totals
 
 
