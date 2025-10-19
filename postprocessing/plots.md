@@ -10,10 +10,12 @@
 - **Type:** `sns.barplot` (grouped or stacked)
 - **Axes:** x = Rank, y = Time (s)
 - **Hue:** Metric (`Comp Total`, `Comm Total`)
+- **style** Domain?
 - **Annotation** Annotate with chunck count pr rank
 
 legend for config 
 relplot for forskellige chunk sizes (subplots)
+in total 1 plot pr chunk size  
 
 ### **2.4 Heatmap of Chunk Times**
 - **Goal:** Visualize spatial imbalance in chunk compute times.
@@ -21,7 +23,7 @@ relplot for forskellige chunk sizes (subplots)
 - **Axes:** Chunk size / Image size × Chunk ID grid (keep chunk size OR Image Size constant)
 - **Value:** Chunk compute time (s)
 
-Relplot for domain (subplot) 
+In total 1 plot
 
 ---
 ---

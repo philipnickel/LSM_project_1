@@ -212,11 +212,11 @@ ranks_idx = build_index(
     ],
 )
 
-runs_df.to_parquet(os.path.join(OUT_DIR, "runs_df.parquet"), index=False)
+#runs_df.to_parquet(os.path.join(OUT_DIR, "runs_df.parquet"), index=False)
 runs_idx.to_parquet(os.path.join(OUT_DIR, "runs_indexed.parquet"))
-chunks_df.to_parquet(os.path.join(OUT_DIR, "chunks_df.parquet"), index=False)
+#chunks_df.to_parquet(os.path.join(OUT_DIR, "chunks_df.parquet"), index=False)
 chunks_idx.to_parquet(os.path.join(OUT_DIR, "chunks_indexed.parquet"))
-ranks_df.to_parquet(os.path.join(OUT_DIR, "ranks_df.parquet"), index=False)
+#ranks_df.to_parquet(os.path.join(OUT_DIR, "ranks_df.parquet"), index=False)
 ranks_idx.to_parquet(os.path.join(OUT_DIR, "ranks_indexed.parquet"))
 
 print(f"[info] Saved all parquet files to {OUT_DIR}")

@@ -293,35 +293,14 @@ def _master_dynamic(
 
     status = MPI.Status()
 
-    while active_workers > 0 or scheduler.has_chunks():
-        processed = False
-
+    while active_workers > 0:
         while comm.iprobe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status):
             worker = status.Get_source()
             handle_completion(worker)
-            processed = True
 
-        if scheduler.has_chunks():
-            chunk_id = scheduler.request_chunk()
-            if chunk_id is not None:
-                start, end, chunk, comp_time = _compute_chunk_timed(config, chunk_id)
-                _rank_log(
-                    0,
-                    f"Computing chunk {chunk_id} (rows {start}:{end}) took {comp_time:.4f}s [dynamic-master]",
-                )
-                image[start:end, :] = chunk
-                stats["comp"] += comp_time
-                stats["chunks"] += 1
-                chunk_details.append(_chunk_record(0, chunk_id, start, end, comp_time))
-                processed = True
-
-        if processed:
-            continue
-
-        if active_workers > 0:
-            comm.probe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status)
-            worker = status.Get_source()
-            handle_completion(worker)
+        comm.probe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status)
+        worker = status.Get_source()
+        handle_completion(worker)
 
     return image, stats, chunk_details
 

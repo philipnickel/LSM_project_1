@@ -7,7 +7,7 @@ experiments:
       mem_per_core: "2GB"
       span: "hosts=1"
     sweep:
-      n_ranks: [4,8]
+      n_ranks: [8]
       chunk_size: [10] 
       image_shape:
         - {width: 50, height: 50}
@@ -24,8 +24,8 @@ experiments:
       mem_per_core: "2GB"
       span: "hosts=1"
     sweep:
-      n_ranks: [16]
-      chunk_size: [5, 10, 25, 50, 100, 200, 250, 500, 750, 1000,1500]
+      n_ranks: [8]
+      chunk_size: [20, 75, 125, 250, 500]
       image_shape:
         - {width: 10000, height: 10000}
       schedule: [static, dynamic]
