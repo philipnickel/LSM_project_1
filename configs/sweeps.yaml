@@ -38,11 +38,11 @@ experiments:
   - name: scaling_mult_host
     resources:
       queue: hpcintro
-      n_cores: 100
-      walltime: "00:15"
+      n_cores: 90
+      walltime: "00:05"
       mem_per_core: "5GB"
     sweep:
-      n_ranks: [90, 100]
+      n_ranks: [85, 90]
       chunk_size: [100]
       image_shape:
         - {width: 20000, height: 20000}

@@ -1,8 +1,8 @@
 #!/bin/bash
 #BSUB -J scaling_mult_host[1-8]
 #BSUB -q hpcintro
-#BSUB -n 100
-#BSUB -W 00:15
+#BSUB -n 90
+#BSUB -W 00:05
 #BSUB -R "span[ptile=10]"
 #BSUB -R "rusage[mem=5GB]"
 #BSUB -o logs/scaling_mult_host_%J_%I.out
