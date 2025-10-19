@@ -163,7 +163,7 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
                     f"{int(chunk_size)}",
                     ha="center",
                     va="bottom",
-                    fontsize=8,
+                    fontsize=4,
                 )
 
             if not legend_handles:
@@ -174,7 +174,7 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
         ax.set_xticklabels([str(rank) for rank in ranks])
         ax.set_xlabel("Rank")
         ax.set_ylim(top=ymax * 1.15 if ymax else 1)
-        ax.grid(axis="y", linestyle="--", alpha=0.3)
+        ax.grid(axis="y", linestyle="--", alpha=0.1)
 
     for extra_ax in axes[len(configs) :]:
         extra_ax.remove()
@@ -191,7 +191,7 @@ def plot_bars(ranks: pd.DataFrame, out_dir: Path) -> None:
             frameon=False,
         )
 
-    fig.suptitle("Rank mean compute vs communication time", y=0.98)
+    #fig.suptitle("Rank Compute vs Communication time", y=0.98)
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(out_dir / "2.0Ranks.pdf", bbox_inches="tight")
     plt.close(fig)
