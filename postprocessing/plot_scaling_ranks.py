@@ -20,11 +20,11 @@ from postprocessing.utils import (
     load_suite_runs,
 )
 
-SUITE = "scaling_mult_host"
+SUITES: tuple[str, ...] = ("scaling_mult_host", "scaling_proc")
 
 
-def prepare_data() -> pd.DataFrame:
-    runs_idx = ensure_config_level(load_suite_runs(SUITE, as_index=True))
+def _suite_totals(suite: str) -> pd.DataFrame:
+    runs_idx = ensure_config_level(load_suite_runs(suite, as_index=True))
     runs = runs_idx.reset_index()
     runs["N Ranks"] = pd.to_numeric(runs["N Ranks"], errors="coerce")
     runs = runs.dropna(subset=["N Ranks"])
@@ -34,7 +34,7 @@ def prepare_data() -> pd.DataFrame:
     if {"Comp Total", "Comm Total"}.issubset(runs.columns):
         totals = runs.rename(columns={"Comp Total": "comp_total", "Comm Total": "comm_total"})
     else:
-        ranks_idx = ensure_config_level(load_suite_ranks(SUITE, as_index=True))
+        ranks_idx = ensure_config_level(load_suite_ranks(suite, as_index=True))
         agg = (
             ranks_idx.groupby(level="Run Id")[["comp_time", "comm_send_time", "comm_recv_time"]]
             .sum()
@@ -48,6 +48,20 @@ def prepare_data() -> pd.DataFrame:
     totals = totals.dropna(subset=["N Ranks"])
     totals["N Ranks"] = totals["N Ranks"].astype(int)
     totals = totals.sort_values(["Image Size", "N Ranks"])
+    totals["Suite"] = suite
+    return totals
+
+
+def prepare_data() -> pd.DataFrame:
+    frames: list[pd.DataFrame] = []
+    for suite in SUITES:
+        try:
+            frames.append(_suite_totals(suite))
+        except FileNotFoundError:
+            continue
+    if not frames:
+        raise RuntimeError(f"No data found for suites {SUITES}")
+    return pd.concat(frames, ignore_index=True)
     return totals
 
 
@@ -59,7 +73,7 @@ def plot_wall_time(totals: pd.DataFrame, out_dir: Path) -> None:
         x="N Ranks",
         y="Wall Time(s)",
         hue="Config",
-        style="Config",
+        style="Suite",
         markers=True,
         dashes=False,
         estimator=None,
@@ -73,7 +87,7 @@ def plot_wall_time(totals: pd.DataFrame, out_dir: Path) -> None:
     ax.set_ylabel("Wall time [s]")
     ax.set_title("Wall Time vs Rank Count")
     fig.tight_layout()
-    fig.savefig(out_dir / "5.1_wall_time_vs_ranks_mult_host.pdf", bbox_inches="tight")
+    fig.savefig(out_dir / "5.1_wall_time_vs_ranks.pdf", bbox_inches="tight")
     plt.close(fig)
 
 
