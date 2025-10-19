@@ -20,15 +20,14 @@ experiments:
   - name: scaling_proc
     resources:
       queue: hpcintro
-      n_cores: 16
-      walltime: "00:10"
+      n_cores: 24
+      walltime: "00:15"
       mem_per_core: "2GB"
       span: "hosts=1"
     sweep:
       n_ranks: [1, 4, 8, 10, 16, 20, 24]
-      chunk_size: [8]
+      chunk_size: [100]
       image_shape:
-        - {width: 10000, height: 10000}
         - {width: 20000, height: 20000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
@@ -44,7 +43,7 @@ experiments:
       mem_per_core: "4GB"
     sweep:
       n_ranks: [20, 30, 40, 50, 60, 70, 80, 90, 100]
-      chunk_size: [50]
+      chunk_size: [100]
       image_shape:
         - {width: 20000, height: 20000}
       schedule: [static, dynamic]
@@ -61,7 +60,7 @@ experiments:
       span: "hosts=1"
     sweep:
       n_ranks: [16]
-      chunk_size: [50]
+      chunk_size: [100]
       image_shape:
         - {width: 1000, height: 1000}
         - {width: 5000, height: 5000}
