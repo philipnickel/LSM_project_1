@@ -25,7 +25,7 @@ experiments:
       span: "hosts=1"
     sweep:
       n_ranks: [8]
-      chunk_size: [20, 75, 125, 250, 500]
+      chunk_size: [50, 100, 250, 500, 750, 1500]
       image_shape:
         - {width: 10000, height: 10000}
       schedule: [static, dynamic]

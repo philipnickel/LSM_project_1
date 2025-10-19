@@ -1,5 +1,5 @@
 #!/bin/bash
-#BSUB -J chunks[1-20]
+#BSUB -J chunks[1-24]
 #BSUB -q hpcintro
 #BSUB -n 8
 #BSUB -W 00:05
