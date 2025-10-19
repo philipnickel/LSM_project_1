@@ -275,8 +275,16 @@ def _master_dynamic(
     stats = _init_rank_stats()
     chunk_details: List[Dict] = []
 
-    # Process master's own chunks while managing workers
     active_workers = size - 1
+
+    def handle_completion(worker: int) -> None:
+        nonlocal active_workers
+        recv_start = MPI.Wtime()
+        comm.recv(source=worker, tag=REQUEST_TAG)
+        stats["comm_recv"] += MPI.Wtime() - recv_start
+        _receive_worker_chunk(comm, worker, image, stats)
+        if not _assign_chunk(comm, scheduler, worker, stats):
+            active_workers -= 1
 
     # Initial assignment to all workers
     for worker in range(1, size):
@@ -285,47 +293,35 @@ def _master_dynamic(
 
     status = MPI.Status()
 
-    # Process requests
-    while active_workers > 0:
-        # Check for worker requests (non-blocking)
-        if comm.iprobe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status):
+    while active_workers > 0 or scheduler.has_chunks():
+        processed = False
+
+        while comm.iprobe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status):
             worker = status.Get_source()
-            recv_start = MPI.Wtime()
-            comm.recv(source=worker, tag=REQUEST_TAG)  # Dummy receive
-            stats["comm_recv"] += MPI.Wtime() - recv_start
+            handle_completion(worker)
+            processed = True
 
-            # Receive worker's result
-            _receive_worker_chunk(comm, worker, image, stats)
+        if scheduler.has_chunks():
+            chunk_id = scheduler.request_chunk()
+            if chunk_id is not None:
+                start, end, chunk, comp_time = _compute_chunk_timed(config, chunk_id)
+                _rank_log(
+                    0,
+                    f"Computing chunk {chunk_id} (rows {start}:{end}) took {comp_time:.4f}s [dynamic-master]",
+                )
+                image[start:end, :] = chunk
+                stats["comp"] += comp_time
+                stats["chunks"] += 1
+                chunk_details.append(_chunk_record(0, chunk_id, start, end, comp_time))
+                processed = True
 
-            # Assign next chunk
-            if not _assign_chunk(comm, scheduler, worker, stats):
-                active_workers -= 1
+        if processed:
             continue
 
-        # Do master's own work when chunks remain
-        chunk_id = scheduler.request_chunk()
-        if chunk_id is not None:
-            start, end, chunk, single_comp = _compute_chunk_timed(config, chunk_id)
-            _rank_log(
-                0,
-                f"Master computing chunk {chunk_id} (rows {start}:{end}) took {single_comp:.4f}s",
-            )
-            stats["comp"] += single_comp
-            image[start:end, :] = chunk
-            stats["chunks"] += 1
-            chunk_details.append(_chunk_record(0, chunk_id, start, end, single_comp))
-            continue
-
-        # No master chunk available: block until a worker reports completion
-        comm.probe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status)
-        worker = status.Get_source()
-        recv_start = MPI.Wtime()
-        comm.recv(source=worker, tag=REQUEST_TAG)
-        stats["comm_recv"] += MPI.Wtime() - recv_start
-        _receive_worker_chunk(comm, worker, image, stats)
-
-        if not _assign_chunk(comm, scheduler, worker, stats):
-            active_workers -= 1
+        if active_workers > 0:
+            comm.probe(source=MPI.ANY_SOURCE, tag=REQUEST_TAG, status=status)
+            worker = status.Get_source()
+            handle_completion(worker)
 
     return image, stats, chunk_details
 

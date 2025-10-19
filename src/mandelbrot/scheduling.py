@@ -43,3 +43,7 @@ class DynamicScheduler:
         chunk_id = self.next_chunk
         self.next_chunk += 1
         return chunk_id
+
+    def has_chunks(self) -> bool:
+        """Indicate whether more chunks remain to be assigned."""
+        return self.next_chunk < self.config.total_chunks

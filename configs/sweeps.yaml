@@ -19,7 +19,7 @@ experiments:
   - name: chunks
     resources:
       queue: hpcintro
-      n_cores: 16
+      n_cores: 8
       walltime: "00:05"
       mem_per_core: "2GB"
       span: "hosts=1"
@@ -44,7 +44,7 @@ experiments:
       n_ranks: [8]
       chunk_size: [8]
       image_shape:
-        - {width: 5000, height: 5000}
+        - {width: 10000, height: 10000}
       schedule: [static, dynamic]
       communication: [blocking, nonblocking]
       domains:
